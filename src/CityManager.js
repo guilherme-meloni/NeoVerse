@@ -86,10 +86,10 @@ export class CityManager {
     
     const cols = Math.ceil(Math.sqrt(renderEntries.length));
 
-    // Floor for collision
+    // Floor Collision
     const floorBox = new THREE.Box3();
     floorBox.min.set(-100, -5, -100);
-    floorBox.max.set(100, 0, 100);
+    floorBox.max.set(100, -0.1, 100); // FIX: Lowered slightly to prevent friction with player feet
     this.universe.colliders.push(floorBox);
     
     renderEntries.forEach((entry, index) => {
@@ -99,12 +99,9 @@ export class CityManager {
         const x = (col * spacing) - (cols * spacing / 2);
         const z = (row * spacing) - (cols * spacing / 2);
         
-        // HEURÍSTICA DE TIPO:
-        // 1. Se tem children (leitura recursiva), é dir.
-        // 2. Se não tem ponto no nome (ex: 'documents'), assumimos dir.
-        // 3. Se tem ponto (ex: 'image.png'), assumimos arquivo.
-        // Ajuste conforme necessário para o seu SO (Linux geralmente não exige extensão, mas é um padrão comum).
-        const isDir = entry.children !== undefined || !entry.name.includes('.');
+        // HEURISTIC FIX: Tauri readDir (non-recursive) doesn't always give types.
+        // Assume it's a Dir if no extension. If it has extension, it's a File.
+        const isDir = !entry.name.includes('.');
         
         if (isDir) {
             this.createBuilding(entry, x, z);
@@ -156,7 +153,7 @@ export class CityManager {
         targetPath: entry.path,
         type: 'dir',
         pos: new THREE.Vector3(x, 0, z),
-        radius: 4,
+        radius: 5, // Increased radius
         name: entry.name
     });
   }
@@ -247,12 +244,13 @@ export class CityManager {
     // EXIT DOOR (Behind start position, towards -Z)
     this.createPortal("..", 0, d/2 - 0.5, true); // Behind player's starting point
 
-    // SEPARATE FILES AND DIRS
+    // SEPARATE FILES AND DIRS (Heuristic Fix)
     const files = [];
     const dirs = [];
     
     entries.forEach(e => {
-         const isDir = e.children !== undefined || !e.name.includes('.');
+         // Same heuristic as City: No dot = Dir
+         const isDir = !e.name.includes('.');
          if(isDir) dirs.push(e);
          else files.push(e);
     });
