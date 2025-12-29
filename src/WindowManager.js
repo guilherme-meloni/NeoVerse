@@ -106,10 +106,11 @@ export class WindowManager {
     // Atualiza UI
     const statusDot = document.getElementById('status-dot');
     const statusText = document.getElementById('status-text');
-    const overlapCount = document.getElementById('overlap-count');
-    
-    overlapCount.textContent = overlapping.length;
-    
+        const overlapCount = document.getElementById('overlap-count');
+        if (overlapCount) {
+            overlapCount.textContent = overlapping.length;
+            overlapCount.style.color = overlapping.length > 0 ? '#ff0000' : '#00ff00';
+        }    
     if (overlapping.length > 0) {
       statusDot.className = 'status-dot dot-merging';
       statusText.textContent = 'Mesclando!';

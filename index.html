@@ -300,10 +300,15 @@
   </div>
 
   <!-- HUD OVERLAY -->
-  <div id="hud-overlay">
-    <div class="hud-stat" id="hud-mode">3D ORBITAL</div>
-    <div class="hud-sub" id="hud-coords">X: 0 Y: 0</div>
-  </div>
+    <div id="hud-overlay" style="position: absolute; top: 10px; left: 10px; color: #00ff00; font-family: monospace; pointer-events: none; user-select: none;">
+        <div>MODE: <span id="hud-mode">3D ORBITAL</span></div>
+        <div style="font-size: 12px; margin-top: 5px;">
+            Janelas: <span id="window-count">1</span> | 
+            Objetos: <span id="object-count">0</span> | 
+            Overlaps: <span id="overlap-count">0</span>
+        </div>
+        <div style="font-size: 10px; color: #aaa; margin-top: 5px;">Render: <span id="debug-fps">--</span> FPS</div>
+    </div>
 
   <!-- SCRIPTS -->
   <script>

@@ -80,6 +80,22 @@ export class Universe {
     this.lightsGroup = new THREE.Group();
     this.scene.add(this.lightsGroup);
     
+    // Hidden File Input for Texture Loading
+    this.fileInput = document.createElement('input');
+    this.fileInput.type = 'file';
+    this.fileInput.accept = 'image/*';
+    this.fileInput.style.display = 'none';
+    document.body.appendChild(this.fileInput);
+    
+    this.fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file && this.textureTargetObject) {
+            this.applyTextureToMesh(this.textureTargetObject, file);
+            this.textureTargetObject = null;
+        }
+        this.fileInput.value = ''; // Reset
+    });
+
     // Setup Luzes (só serão visíveis no ultra)
     const ambient = new THREE.AmbientLight(0x404040, 0.5);
     const dir = new THREE.DirectionalLight(0xffffff, 1);
@@ -108,12 +124,89 @@ export class Universe {
     document.addEventListener('pointerlockchange', this.onPointerLockChange);
     document.addEventListener('pointerlockerror', this.onPointerLockError);
     window.addEventListener('resize', () => this.onResize());
+    
+    // Drag & Drop Textures
+    this.setupDragDrop();
 
     // Aplica qualidade inicial
     this.setQuality('retro');
 
     this.animate();
     console.log('🌌 Universe Init');
+  }
+
+  setupDragDrop() {
+      // Prevent default browser behavior for drag events
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+          this.canvas.addEventListener(eventName, (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+          }, false);
+      });
+
+      // Highlight effect? (Optional)
+      this.canvas.addEventListener('dragover', () => {
+          this.canvas.style.cursor = 'copy';
+      });
+
+      this.canvas.addEventListener('drop', (e) => {
+          this.canvas.style.cursor = 'default';
+          
+          const dt = e.dataTransfer;
+          const files = dt.files;
+          
+          if (files.length > 0) {
+              const file = files[0];
+              if (file.type.startsWith('image/')) {
+                  this.handleTextureDrop(e.clientX, e.clientY, file);
+              }
+          }
+      });
+  }
+
+  handleTextureDrop(clientX, clientY, file) {
+      // Raycast to find target object
+      const mouse = new THREE.Vector2();
+      mouse.x = (clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+      
+      this.raycaster.setFromCamera(mouse, this.camera);
+      
+      // Filter only our managed objects
+      const objects = Array.from(this.objects.values());
+      const intersects = this.raycaster.intersectObjects(objects);
+      
+      if (intersects.length > 0) {
+          const targetMesh = intersects[0].object;
+          this.applyTextureToMesh(targetMesh, file);
+      }
+  }
+
+  applyTextureToMesh(mesh, file) {
+      const url = URL.createObjectURL(file);
+      const loader = new THREE.TextureLoader();
+      
+      loader.load(url, (texture) => {
+          // Optimization: Set correct color space for images
+          texture.colorSpace = THREE.SRGBColorSpace;
+          
+          // Optimization: Dispose old texture to free GPU memory
+          if (mesh.material.map) {
+              mesh.material.map.dispose();
+          }
+
+          mesh.material.map = texture;
+          mesh.material.color.setHex(0xffffff); // Reset color to white so texture is visible
+          mesh.material.needsUpdate = true;
+          
+          // Save texture info to userData so it might persist (future proofing)
+          mesh.userData.hasTexture = true;
+          
+          console.log(`🖼️ Texture applied to object ${mesh.userData.id}`);
+          
+          // Cleanup Blob URL
+          URL.revokeObjectURL(url);
+      });
   }
 
   // --- QUALITY SYSTEM ---
@@ -513,7 +606,7 @@ export class Universe {
               }
           }
       } else {
-          // FPS Mode: Click to lock
+          // FPS: Lock pointer if not locked
           if(document.pointerLockElement !== this.canvas) {
               // Try unadjusted first (for gaming mice/linux)
               this.canvas.requestPointerLock({ unadjustedMovement: true }).catch(() => {
@@ -523,6 +616,23 @@ export class Universe {
       }
     });
 
+    // Double Click to Load Texture
+    this.canvas.addEventListener('dblclick', (e) => {
+        if (this.viewMode !== '3d') return;
+
+        this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+        this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        this.raycaster.setFromCamera(this.mouse, this.camera);
+        
+        const objects = Array.from(this.objects.values()).filter(o => !o.userData.isGhost);
+        const intersects = this.raycaster.intersectObjects(objects);
+        
+        if (intersects.length > 0) {
+            this.textureTargetObject = intersects[0].object;
+            this.fileInput.click(); // Open system dialog
+        }
+    });
+
     window.addEventListener('mouseup', () => {
       this.isRotating = false;
       this.isPanning = false;
@@ -530,6 +640,7 @@ export class Universe {
       this.selectedObject = null;
       this.canvas.style.cursor = 'default';
     });
+
     
     // Zoom (Blender Style)
     this.canvas.addEventListener('wheel', (e) => {
