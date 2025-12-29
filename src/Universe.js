@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import { open as shellOpen } from '@tauri-apps/api/shell';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 
 export class Universe {
   constructor(canvas, hasPlayer = false) {
@@ -7,11 +11,19 @@ export class Universe {
     this.scene = null;
     this.camera = null;
     this.renderer = null;
+    this.composer = null;
     this.objects = new Map();
     this.animationId = null;
 
     // Configurações Globais
-    this.qualityMode = 'retro'; // 'retro' | 'ultra'
+    this.settings = {
+        quality: 'custom',
+        shadows: true,
+        bloom: true,
+        antialias: true,
+        fog: true
+    };
+
     this.hasPlayer = hasPlayer;
     
     // Player
@@ -53,7 +65,7 @@ export class Universe {
 
     // Throttle
     this.lastFrameTime = 0;
-    this.frameInterval = 1000 / 30; // 30 FPS base
+    this.frameInterval = 1000 / 60; // 60 FPS base
 
     this.init();
   }
@@ -63,19 +75,36 @@ export class Universe {
     
     // Camera
     const aspect = window.innerWidth / window.innerHeight;
-    this.camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 100);
+    this.camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
     this.camera.position.set(0, 5, 12);
     this.camera.lookAt(0, 0, 0);
 
     // Renderer (Inicializa Básico)
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
-      antialias: false,
-      powerPreference: "low-power",
-      precision: "lowp"
+      antialias: true, // Force on initially
+      powerPreference: "high-performance",
     });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(0.4);
+    this.renderer.setPixelRatio(window.devicePixelRatio);
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    // POST PROCESSING
+    this.composer = new EffectComposer(this.renderer);
+    
+    const renderPass = new RenderPass(this.scene, this.camera);
+    this.composer.addPass(renderPass);
+
+    // Bloom
+    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+    this.bloomPass.threshold = 0.2;
+    this.bloomPass.strength = 1.2;
+    this.bloomPass.radius = 0.5;
+    this.composer.addPass(this.bloomPass);
+    
+    const outputPass = new OutputPass();
+    this.composer.addPass(outputPass);
 
     // Lights Group (Para ligar/desligar)
     this.lightsGroup = new THREE.Group();
@@ -97,16 +126,24 @@ export class Universe {
         this.fileInput.value = ''; // Reset
     });
 
-    // Setup Luzes (só serão visíveis no ultra)
-    const ambient = new THREE.AmbientLight(0x404040, 0.5);
-    const dir = new THREE.DirectionalLight(0xffffff, 1);
-    dir.position.set(10, 20, 10);
+    // Setup Luzes
+    const ambient = new THREE.AmbientLight(0x404040, 0.6); // Luz base
     this.lightsGroup.add(ambient);
+
+    const dir = new THREE.DirectionalLight(0xffffff, 2);
+    dir.position.set(10, 20, 10);
+    dir.castShadow = true;
+    dir.shadow.mapSize.width = 2048;
+    dir.shadow.mapSize.height = 2048;
     this.lightsGroup.add(dir);
 
     // Helpers
+    // FIX: Grid levemente elevado e com transparência para evitar flickering
     const gridHelper = new THREE.GridHelper(50, 50, 0x00ff00, 0x003300);
-    gridHelper.position.y = 0.02; // Fix Z-fighting (Green flickering)
+    gridHelper.position.y = 0.05; 
+    gridHelper.material.transparent = true;
+    gridHelper.material.opacity = 0.5;
+    gridHelper.material.depthWrite = false; // Ajuda no Z-Fighting
     this.scene.add(gridHelper);
 
     // Chão invisível (mas sólido para raycast)
@@ -130,7 +167,7 @@ export class Universe {
     this.setupDragDrop();
 
     // Aplica qualidade inicial
-    this.setQuality('retro');
+    this.updateSettings(this.settings);
 
     this.animate();
     console.log('🌌 Universe Init');
@@ -213,40 +250,67 @@ export class Universe {
   // --- QUALITY SYSTEM ---
 
   setQuality(mode) {
-    console.log(`🎨 Switching to ${mode}`);
-    this.qualityMode = mode;
-    
-    if (window.updateQualityUI) window.updateQualityUI(mode);
-
+    // Backward compatibility for the UI buttons
     if (mode === 'retro') {
-      this.renderer.setPixelRatio(0.5); // 0.5 é mais estável que 0.4
-      this.scene.background = new THREE.Color(0x000000);
-      this.scene.fog = new THREE.FogExp2(0x000000, 0.04);
-      this.lightsGroup.visible = false;
-      this.frameInterval = 1000 / 30;
+        this.updateSettings({
+            quality: 'retro',
+            shadows: false,
+            bloom: false,
+            antialias: false,
+            fog: false
+        });
     } else {
-      this.renderer.setPixelRatio(window.devicePixelRatio > 1.5 ? 1.5 : 1);
-      this.scene.background = new THREE.Color(0x050510);
-      this.scene.fog = new THREE.FogExp2(0x050510, 0.015);
-      this.lightsGroup.visible = true;
-      this.frameInterval = 1000 / 60;
-    }
-
-    this.objects.forEach(mesh => this.updateObjectMaterial(mesh));
-
-    if (this.player) {
-      this.player.traverse(child => {
-        if (child.isMesh) this.updateObjectMaterial(child, true);
-      });
-      if (this.playerLight) this.playerLight.visible = (mode === 'ultra');
+        this.updateSettings({
+            quality: 'ultra',
+            shadows: true,
+            bloom: true,
+            antialias: true,
+            fog: true
+        });
     }
   }
 
-  // Helper para criar material
+  updateSettings(newSettings) {
+      this.settings = { ...this.settings, ...newSettings };
+      console.log('⚙️ Settings Updated:', this.settings);
+
+      // Apply specific settings
+      
+      // 1. Shadows / Lights
+      this.lightsGroup.visible = this.settings.shadows; // Basic heuristic: if shadows on, lights on
+      this.renderer.shadowMap.enabled = this.settings.shadows;
+      
+      // 2. Fog / Background
+      if (this.settings.fog) {
+          this.scene.background = new THREE.Color(0x050510);
+          this.scene.fog = new THREE.FogExp2(0x050510, 0.015);
+      } else {
+          this.scene.background = new THREE.Color(0x000000);
+          this.scene.fog = new THREE.FogExp2(0x000000, 0.04);
+      }
+
+      // 3. Antialias (Requires renderer rebuild usually, but we can toggle pixel ratio)
+      this.renderer.setPixelRatio(this.settings.antialias ? window.devicePixelRatio : 0.5);
+
+      // 4. Update Materials
+      this.objects.forEach(mesh => this.updateObjectMaterial(mesh));
+      if (this.player) {
+          this.player.traverse(child => {
+            if (child.isMesh) this.updateObjectMaterial(child, true);
+          });
+          if (this.playerLight) this.playerLight.visible = this.settings.bloom;
+      }
+      
+      // Notify UI if function exists
+      if (window.updateQualityUI) window.updateQualityUI(this.settings.quality);
+  }
+
   getMaterial(color, isEmissive = false) {
-    if (this.qualityMode === 'retro') {
+    if (!this.settings.shadows) {
+      // "Retro" / Low Quality
       return new THREE.MeshBasicMaterial({ color: color });
     } else {
+      // High Quality
       const mat = new THREE.MeshStandardMaterial({
         color: color,
         roughness: 0.3,
@@ -254,7 +318,7 @@ export class Universe {
       });
       if (isEmissive) {
         mat.emissive = new THREE.Color(color);
-        mat.emissiveIntensity = 0.8;
+        mat.emissiveIntensity = this.settings.bloom ? 2.0 : 0.8; // Boost for bloom
       }
       return mat;
     }
@@ -273,20 +337,20 @@ export class Universe {
     const color = props.color || 0xffffff;
     const isNode = mesh.userData.type === 'node';
     
-    // Handle Groups (Folder/Complex icons)
     if (mesh.isGroup) {
         mesh.children.forEach(child => {
             if (child.isMesh) {
                  child.material.dispose();
-                 // Keep white paper inside folder white?
-                 // Or just recolor everything for now to match quality mode
-                 // Let's preserve specific "parts" colors if we can, but simpler is safer for quality switch
                  child.material = this.getMaterial(child.userData.originalColor || color, isNode);
+                 child.castShadow = this.settings.shadows;
+                 child.receiveShadow = this.settings.shadows;
             }
         });
     } else {
         mesh.material.dispose();
         mesh.material = this.getMaterial(color, isNode);
+        mesh.castShadow = this.settings.shadows;
+        mesh.receiveShadow = this.settings.shadows;
     }
   }
 
@@ -335,7 +399,7 @@ export class Universe {
 
   addObject(type, position, properties, id, isGhost = false) {
     let mesh;
-    const segs = 12; 
+    const segs = 32; 
     
     if (type === 'folder') {
         mesh = new THREE.Group();
@@ -393,16 +457,18 @@ export class Universe {
         switch (type) {
           case 'sphere': mesh = new THREE.Mesh(new THREE.SphereGeometry(properties.scale || 1, segs, segs), this.getMaterial(properties.color)); break;
           case 'cube': mesh = new THREE.Mesh(new THREE.BoxGeometry(properties.scale, properties.scale, properties.scale), this.getMaterial(properties.color)); break;
-          case 'node': mesh = new THREE.Mesh(new THREE.SphereGeometry(0.3 * properties.scale, 8, 8), this.getMaterial(properties.color, true)); break;
+          case 'node': mesh = new THREE.Mesh(new THREE.SphereGeometry(0.3 * properties.scale, 32, 32), this.getMaterial(properties.color, true)); break;
           case 'pyramid': mesh = new THREE.Mesh(new THREE.ConeGeometry(properties.scale, properties.scale * 1.5, 4), this.getMaterial(properties.color)); break;
-          case 'torus': mesh = new THREE.Mesh(new THREE.TorusGeometry(properties.scale, 0.3, 6, 12), this.getMaterial(properties.color)); break;
-          case 'cylinder': mesh = new THREE.Mesh(new THREE.CylinderGeometry(properties.scale * 0.5, properties.scale * 0.5, properties.scale * 2, 8), this.getMaterial(properties.color)); break;
-          default: mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 8), this.getMaterial(0xffffff));
+          case 'torus': mesh = new THREE.Mesh(new THREE.TorusGeometry(properties.scale, 0.3, 16, 32), this.getMaterial(properties.color)); break;
+          case 'cylinder': mesh = new THREE.Mesh(new THREE.CylinderGeometry(properties.scale * 0.5, properties.scale * 0.5, properties.scale * 2, 32), this.getMaterial(properties.color)); break;
+          default: mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 32), this.getMaterial(0xffffff));
         }
     }
 
     mesh.position.copy(position);
     mesh.userData = { id, type, properties, isGhost, isSolid: true };
+    mesh.castShadow = this.settings.shadows;
+    mesh.receiveShadow = this.settings.shadows;
     
     if (isGhost) { 
         if (mesh.isGroup) {
@@ -483,6 +549,7 @@ export class Universe {
     if (isLocked) {
       this.viewMode = 'fps';
       if(this.player) this.player.visible = false;
+      document.body.classList.add('fps-mode');
       document.getElementById('hud-mode').textContent = 'FPS MODE';
       document.getElementById('crosshair').classList.add('active');
       document.getElementById('btn-view-mode').innerHTML = '🌍 Sair do FPS (ESC)';
@@ -498,6 +565,7 @@ export class Universe {
           this.camera.lookAt(this.player.position);
           this.cameraRotation = { x: 0, y: 0 };
       }
+      document.body.classList.remove('fps-mode');
       document.getElementById('hud-mode').textContent = '3D ORBITAL';
       document.getElementById('crosshair').classList.remove('active');
       document.getElementById('btn-view-mode').innerHTML = '👁️ Entrar em FPS';
@@ -825,7 +893,12 @@ export class Universe {
 
         }
 
-        this.renderer.render(this.scene, this.camera);
+        if (this.settings.bloom) {
+            this.composer.render();
+        } else {
+            this.renderer.render(this.scene, this.camera);
+        }
+
     } catch (e) {
         console.error("Animate Error:", e);
         this.viewMode = '3d'; 

@@ -205,6 +205,13 @@
     }
     input.ui-input:focus { border-color: var(--secondary); }
 
+    /* FPS MODE HIDES UI */
+    body.fps-mode #main-menu,
+    body.fps-mode #menu-toggle,
+    body.fps-mode #hud-overlay {
+        display: none !important;
+    }
+
   </style>
 </head>
 <body class="retro"> <!-- Default to Retro -->
@@ -295,16 +302,41 @@
 
     <!-- TAB: GRAPHICS -->
     <div id="tab-gfx" class="tab-content">
-      <label class="control-label">Qualidade Gráfica</label>
+      <label class="control-label">Predefinições</label>
       
       <div class="quality-card active" id="q-retro" onclick="setQuality('retro')">
-        <h3>👾 RETRO (Low End)</h3>
-        <p>Ultra-rápido. Pixelado. Sem luzes. Geometria simples. Ideal para seu hardware.</p>
+        <h3>👾 RETRO / LOW</h3>
+        <p>Performance máxima. Sem efeitos.</p>
       </div>
 
       <div class="quality-card" id="q-ultra" onclick="setQuality('ultra')" style="margin-top: 10px;">
-        <h3>✨ ULTRA (Beauty)</h3>
-        <p>Luzes, sombras, brilho (fake), suavização. Pesado. Use com cuidado.</p>
+        <h3>✨ ULTRA / HIGH</h3>
+        <p>Sombras, Luzes, Bloom, AA.</p>
+      </div>
+
+      <div style="margin: 15px 0; border-top: 1px solid #333;"></div>
+      
+      <label class="control-label">Avançado</label>
+      
+      <div class="control-group">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: #aaa; font-size: 12px;">
+            <input type="checkbox" id="gfx-shadows" onchange="toggleGfx('shadows', this.checked)"> Sombras
+        </label>
+      </div>
+      <div class="control-group">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: #aaa; font-size: 12px;">
+            <input type="checkbox" id="gfx-bloom" onchange="toggleGfx('bloom', this.checked)"> Bloom (Brilho)
+        </label>
+      </div>
+      <div class="control-group">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: #aaa; font-size: 12px;">
+            <input type="checkbox" id="gfx-antialias" onchange="toggleGfx('antialias', this.checked)"> Suavização (AA)
+        </label>
+      </div>
+       <div class="control-group">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: #aaa; font-size: 12px;">
+            <input type="checkbox" id="gfx-fog" onchange="toggleGfx('fog', this.checked)"> Neblina (Fog)
+        </label>
       </div>
 
       <div style="margin-top: 20px; font-size: 10px; color: #444;">
@@ -349,16 +381,29 @@
     }
 
     // Global bridge for Universe.js to call
-    window.updateQualityUI = (mode) => {
+    window.updateQualityUI = (settingsOrMode) => {
+      // Handle legacy string input or new object
+      let mode = 'custom';
+      if (typeof settingsOrMode === 'string') mode = settingsOrMode;
+      else mode = settingsOrMode.quality;
+
       document.querySelectorAll('.quality-card').forEach(c => c.classList.remove('active'));
       document.body.classList.remove('retro', 'ultra');
       
       if(mode === 'retro') {
         document.getElementById('q-retro').classList.add('active');
         document.body.classList.add('retro');
-      } else {
+      } else if (mode === 'ultra') {
         document.getElementById('q-ultra').classList.add('active');
         document.body.classList.add('ultra');
+      }
+
+      // Sync Checkboxes if object provided
+      if (typeof settingsOrMode === 'object') {
+          if(document.getElementById('gfx-shadows')) document.getElementById('gfx-shadows').checked = settingsOrMode.shadows;
+          if(document.getElementById('gfx-bloom')) document.getElementById('gfx-bloom').checked = settingsOrMode.bloom;
+          if(document.getElementById('gfx-antialias')) document.getElementById('gfx-antialias').checked = settingsOrMode.antialias;
+          if(document.getElementById('gfx-fog')) document.getElementById('gfx-fog').checked = settingsOrMode.fog;
       }
     }
   </script>

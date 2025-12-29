@@ -39,6 +39,10 @@ async function init() {
   window.setQuality = (mode) => {
     universe.setQuality(mode);
   };
+
+  window.toggleGfx = (key, value) => {
+      universe.updateSettings({ [key]: value });
+  };
   
   // Also expose network funcs
   window.toggleNetwork = async () => {

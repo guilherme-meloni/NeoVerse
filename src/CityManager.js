@@ -84,6 +84,7 @@ export class CityManager {
     });
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -0.05; // Avoid Z-fighting with Universe grid
     this.universe.scene.add(floor);
 
     // GRADE DE NEON (Para noção de espaço)
@@ -140,13 +141,13 @@ export class CityManager {
     if (type === 'factory') {
         // Fábrica: Larga, cinza, baixa
         height = 5;
-        const geo = new THREE.CylinderGeometry(3, 4, height, 6);
+        const geo = new THREE.CylinderGeometry(3, 4, height, 32);
         const mat = new THREE.MeshStandardMaterial({ color: this.colors.factory, roughness: 0.9 });
         mesh = new THREE.Mesh(geo, mat);
         mesh.position.y = height / 2;
         
         // Chaminés
-        const chimGeo = new THREE.CylinderGeometry(0.5, 0.5, 2, 8);
+        const chimGeo = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
         const chim = new THREE.Mesh(chimGeo, mat);
         chim.position.set(1.5, height, 0);
         group.add(chim);
@@ -159,7 +160,7 @@ export class CityManager {
         mesh.position.y = 4;
         
         // Partículas orbitando (simples)
-        const ringGeo = new THREE.TorusGeometry(3, 0.1, 8, 16);
+        const ringGeo = new THREE.TorusGeometry(3, 0.1, 16, 32);
         const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0xff0000 }));
         ring.rotation.x = Math.PI / 2;
         mesh.add(ring);
