@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { readDir } from '@tauri-apps/api/fs';
-import { open } from '@tauri-apps/api/shell';
+import { open as shellOpen } from '@tauri-apps/api/shell';
+import { dirname } from '@tauri-apps/api/path'; // Import dirname for parent path
 
 export class CityManager {
   constructor(universe, windowManager, objectManager) {
@@ -8,8 +9,10 @@ export class CityManager {
     this.windowManager = windowManager;
     this.objectManager = objectManager;
     this.currentPath = null;
+    this.initialRootPath = null; // Store the initial path to determine 'city' view
     this.doors = []; // Lista de IDs para verificar colisão
     this.isCityActive = false;
+    this.interactCooldown = false; // Add cooldown for interaction
     
     // Configurações de Design
     this.colors = {
@@ -26,27 +29,39 @@ export class CityManager {
   async startCity(path) {
     console.log("🏙️ Iniciando Protocolo: Data Metropolis em", path);
     this.isCityActive = true;
-    this.enterDirectory(path);
+    this.initialRootPath = path; // Set the root of this exploration
+    this.loadLevel(path);
   }
 
-  async enterDirectory(path) {
+  async loadLevel(path) {
     this.currentPath = path;
     this.doors = []; // Limpa portas antigas
     
     // 1. Limpar Objetos da Cidade Anterior
     await this.objectManager.removeAllCityObjects();
-    
-    // 2. Configurar Ambiente Cyberpunk (Visual Global)
-    this.universe.setCyberpunkAtmosphere();
+    this.universe.colliders = []; // Clear collision boxes
+
+    // 2. Configurar Ambiente
+    const isCityView = (this.currentPath === this.initialRootPath);
+    if (isCityView) {
+        this.universe.setEnvironment('city');
+    } else {
+        this.universe.setEnvironment('lobby');
+    }
 
     // 3. Ler Arquivos
     try {
       const entries = await readDir(path);
-      this.buildCityBlock(entries);
+      
+      if (isCityView) {
+        this.buildCityBlock(entries);
+      } else {
+        this.buildLobby(entries);
+      }
       
       // Mover player para o início da rua
       if(this.universe.player) {
-        this.universe.player.position.set(0, 2, 0);
+        this.universe.player.position.set(0, 2, isCityView ? 10 : 0); // Start further out in city view
         this.universe.playerVelocity.set(0,0,0);
         this.universe.fpsYaw = Math.PI; 
         this.universe.fpsPitch = 0;
@@ -58,7 +73,6 @@ export class CityManager {
   }
 
   buildCityBlock(entries) {
-    // PROTEÇÃO CONTRA CRASH
     const MAX_ITEMS = 150;
     let renderEntries = entries;
     if (entries.length > MAX_ITEMS) {
@@ -66,20 +80,18 @@ export class CityManager {
         renderEntries = entries.slice(0, MAX_ITEMS);
     }
 
-    // Layout Grid
     const streetWidth = 4;
     const buildingSize = 5;
     const spacing = buildingSize + streetWidth;
     
     const cols = Math.ceil(Math.sqrt(renderEntries.length));
-    
-    // Chão da Cidade (Objeto Especial)
-    // Vamos adicionar o chão como um objeto "city_floor" para ele também sincronizar?
-    // Por enquanto deixamos local no Universe, mas idealmente seria sync também.
-    // Para simplificar, o chão fica local no Universe.js ou adicionamos aqui como 'plane'
-    // Vamos deixar o Universe lidar com o chão infinito global, e aqui só os prédios.
 
-    // Gerar Prédios via ObjectManager
+    // Floor for collision
+    const floorBox = new THREE.Box3();
+    floorBox.min.set(-100, -5, -100);
+    floorBox.max.set(100, 0, 100);
+    this.universe.colliders.push(floorBox);
+    
     renderEntries.forEach((entry, index) => {
         const col = index % cols;
         const row = Math.floor(index / cols);
@@ -87,17 +99,18 @@ export class CityManager {
         const x = (col * spacing) - (cols * spacing / 2);
         const z = (row * spacing) - (cols * spacing / 2);
         
-        const isDir = !entry.name.includes('.'); 
-        
-        if (isDir) {
+        // FsEntry has 'path', 'name', 'is_directory', 'is_file'
+        if (entry.is_directory) {
             this.createBuilding(entry, x, z);
         } else {
             this.createFileMonument(entry, x, z);
         }
     });
 
-    // Portal de Saída (Voltar)
-    this.createPortal("..", 0, 10, true);
+    // Portal de Saída (Voltar) - Only if not at the root of initial exploration
+    if (this.currentPath !== this.initialRootPath) {
+        this.createPortal("..", 0, 10, true);
+    }
   }
 
   async createBuilding(entry, x, z) {
@@ -105,36 +118,40 @@ export class CityManager {
     let type = 'office';
     let height = 6 + Math.random() * 8;
     
-    // Lógica de Arquétipos
-    if (name === 'node_modules' || name.includes('hidden')) {
+    if (name.includes('node_modules') || name.includes('hidden') || name.includes('cache')) {
         type = 'blackhole';
-    } else if (name === 'bin' || name === 'sys' || name === 'windows' || name === 'system32') {
+    } else if (name === 'bin' || name.includes('system') || name.includes('lib')) {
         type = 'factory';
-    } else if (name === 'src' || name === 'code' || name.includes('project')) {
+    } else if (name === 'src' || name.includes('code') || name.includes('project')) {
         type = 'matrix';
-    } else if (name === 'images' || name === 'photos' || name === 'pictures') {
+    } else if (name.includes('image') || name.includes('photo') || name.includes('picture')) {
         type = 'gallery';
     }
 
-    // Cria via ObjectManager para sincronizar!
     const id = await this.objectManager.addObject('building', 
-        { x, y: 0, z }, // Pos
+        { x, y: 0, z }, 
         { 
             buildingType: type,
             height: height,
             label: entry.name,
-            color: this.colors.neonBlue, // Base color fallback
+            color: this.colors.neonBlue, 
             isDir: true
         },
-        true // isCity = true
+        true
     );
 
-    // Registrar Porta
+    const bBox = new THREE.Box3();
+    bBox.min.set(x - 2, 0, z - 2);
+    bBox.max.set(x + 2, height, z + 2);
+    this.universe.colliders.push(bBox);
+
     this.doors.push({
         id: id,
-        path: entry.path,
-        isBack: false,
-        worldPos: new THREE.Vector3(x, 0, z) // Aproximação, o update pegará a real
+        targetPath: entry.path,
+        type: 'dir',
+        pos: new THREE.Vector3(x, 0, z),
+        radius: 4,
+        name: entry.name
     });
   }
 
@@ -143,9 +160,10 @@ export class CityManager {
     const ext = name.split('.').pop().toLowerCase();
     
     let color = 0xcccccc;
-    if (['png', 'jpg', 'jpeg'].includes(ext)) color = this.colors.neonPink;
-    else if (['js', 'json', 'rs', 'py'].includes(ext)) color = this.colors.neonBlue;
-    else if (['exe', 'sh'].includes(ext)) color = 0xff0000;
+    if (['png', 'jpg', 'jpeg', 'gif', 'bmp'].includes(ext)) color = this.colors.neonPink;
+    else if (['js', 'json', 'ts', 'rs', 'py', 'java', 'c', 'cpp', 'h', 'go'].includes(ext)) color = this.colors.neonBlue;
+    else if (['exe', 'sh', 'bat', 'bin', 'dmg', 'app'].includes(ext)) color = 0xff0000;
+    else if (['txt', 'md', 'doc', 'pdf'].includes(ext)) color = 0x00ff00;
 
     const id = await this.objectManager.addObject('monument', 
         { x, y: 1, z },
@@ -159,9 +177,11 @@ export class CityManager {
 
     this.doors.push({
         id: id,
-        path: entry.path,
-        isFile: true,
-        worldPos: new THREE.Vector3(x, 1, z)
+        targetPath: entry.path,
+        type: 'file',
+        pos: new THREE.Vector3(x, 1, z),
+        radius: 2,
+        name: entry.name
     });
   }
 
@@ -174,46 +194,159 @@ export class CityManager {
 
     this.doors.push({
         id: id,
-        isBack: true,
-        worldPos: new THREE.Vector3(x, 1.5, z)
+        type: 'back',
+        pos: new THREE.Vector3(x, 1.5, z),
+        radius: 3,
+        name: name
     });
   }
 
-  // Loop de verificação
+  async buildLobby(entries) {
+    const w = 15, h = 6, d = 15;
+    const wallThick = 1;
+
+    // --- VISUALS (via ObjectManager) ---
+    this.objectManager.addObject('cube', {x:0, y:-0.5, z:0}, { scale: w, color: 0x222222 }, true); // Floor
+    this.objectManager.addObject('cube', {x:0, y:h+0.5, z:0}, { scale: w, color: 0x222222 }, true); // Ceiling
+
+    // Walls
+    const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.2 });
+    // Back wall
+    this.objectManager.addObject('cube', {x:0, y:h/2, z: -d/2 - wallThick/2}, { scaleX: w, scaleY: h, scaleZ: wallThick, material: wallMaterial }, true);
+    // Front wall
+    this.objectManager.addObject('cube', {x:0, y:h/2, z: d/2 + wallThick/2}, { scaleX: w, scaleY: h, scaleZ: wallThick, material: wallMaterial }, true);
+    // Left wall
+    this.objectManager.addObject('cube', {x:-w/2 - wallThick/2, y:h/2, z: 0}, { scaleX: wallThick, scaleY: h, scaleZ: d, material: wallMaterial }, true);
+    // Right wall
+    this.objectManager.addObject('cube', {x:w/2 + wallThick/2, y:h/2, z: 0}, { scaleX: wallThick, scaleY: h, scaleZ: d, material: wallMaterial }, true);
+
+
+    // --- COLLISIONS ---
+    const walls = [
+        { min: [-w/2, 0, -d/2 - wallThick], max: [w/2, h, -d/2] }, // Back
+        { min: [-w/2, 0, d/2], max: [w/2, h, d/2 + wallThick] },   // Front
+        { min: [-w/2 - wallThick, 0, -d/2], max: [-w/2, h, d/2] }, // Left
+        { min: [w/2, 0, -d/2], max: [w/2 + wallThick, h, d/2] },   // Right
+        { min: [-w/2, -1, -d/2], max: [w/2, 0, d/2] },              // Floor for player
+        { min: [-w/2, h, -d/2], max: [w/2, h+1, d/2] }              // Ceiling
+    ];
+
+    walls.forEach(dims => {
+        const box = new THREE.Box3();
+        box.min.set(...dims.min);
+        box.max.set(...dims.max);
+        this.universe.colliders.push(box);
+    });
+    
+    // EXIT DOOR (Behind start position, towards -Z)
+    this.createPortal("..", 0, d/2 - 0.5, true); // Behind player's starting point
+
+    // FILES (Center Pedestals)
+    const files = entries.filter(e => e.is_file); 
+    files.forEach((f, i) => {
+        const angle = (i / files.length) * Math.PI * 2;
+        const r = 4;
+        const fx = Math.cos(angle) * r;
+        const fz = Math.sin(angle) * r;
+        
+        // Pedestal + File
+        this.objectManager.addObject('cylinder', {x: fx, y: 0.5, z: fz}, { scale: 1, color: 0x333333 }, true);
+        this.objectManager.addObject('file', {x: fx, y: 1.5, z: fz}, { color: 0x00ffff, label: f.name }, true);
+
+        // Collision for pedestal
+        const pedBox = new THREE.Box3();
+        pedBox.min.set(fx - 0.5, 0, fz - 0.5);
+        pedBox.max.set(fx + 0.5, 1, fz + 0.5);
+        this.universe.colliders.push(pedBox);
+
+        this.doors.push({
+            type: 'file',
+            targetPath: f.path,
+            pos: new THREE.Vector3(fx, 1.5, fz),
+            radius: 2,
+            name: f.name
+        });
+    });
+
+    // ELEVATORS (Subdirectories) - On Side Walls
+    const dirs = entries.filter(e => e.is_directory);
+    dirs.forEach((dItem, i) => {
+        const isLeft = i % 2 === 0;
+        const xPos = isLeft ? -w/2 + 0.5 : w/2 - 0.5;
+        const zPos = ((i/2|0) - (dirs.length/4)) * 4;
+
+        this.objectManager.addObject('building', // Reusing building as elevator frame
+            { x: xPos, y: 0, z: zPos }, 
+            { buildingType: 'office', height: 4, label: dItem.name, scale: 0.5 }, 
+            true
+        );
+        
+        this.doors.push({
+            type: 'dir',
+            targetPath: dItem.path,
+            pos: new THREE.Vector3(xPos, 1, zPos),
+            radius: 3,
+            name: dItem.name
+        });
+    });
+  }
+
   update(playerPos) {
     if (!this.isCityActive) return;
+    
+    let nearest = null;
+    let minD = Infinity;
 
-    // Verificar distância das portas
     for (const door of this.doors) {
-        // Obter posição real do objeto (caso tenha movido ou seja ghost)
-        // Mas prédios são estáticos, então worldPos inicial serve para performance
-        // A menos que queiramos janelas móveis levando a cidade junto (complexo)
-        
-        // Se a janela se moveu, a "cidade" se moveu junto visualmente
-        // POREM, playerPos é relativo à janela local?
-        // Sim, player é local.
-        
-        const dx = playerPos.x - door.worldPos.x;
-        const dz = playerPos.z - door.worldPos.z;
-        const dist = Math.sqrt(dx*dx + dz*dz);
-
-        if (dist < 1.5) {
-            if (door.isFile) {
-                if(!this.openingFile) {
-                    this.openingFile = true;
-                    console.log("📄 Abrindo arquivo:", door.path);
-                    open(door.path);
-                    setTimeout(() => this.openingFile = false, 2000);
-                }
-            } else if (door.isBack) {
-                console.log("🔙 Voltando...");
-                // Implementar lógica de voltar real
-            } else {
-                console.log("🚪 Entrando em:", door.path);
-                this.enterDirectory(door.path);
+        const dist = playerPos.distanceTo(door.pos);
+        if (dist < door.radius) {
+            if (dist < minD) {
+                minD = dist;
+                nearest = door;
             }
-            break; 
         }
     }
+
+    const prompt = document.getElementById('interaction-prompt');
+    if (nearest) {
+        let text = "";
+        if (nearest.type === 'dir') text = `ENTRAR ${nearest.name}`;
+        else if (nearest.type === 'back') text = "VOLTAR";
+        else text = `ABRIR ${nearest.name}`;
+        
+        prompt.textContent = `[E] / TAP: ${text}`;
+        prompt.style.display = 'block';
+
+        if ((this.universe.keys.e || (this.universe.joystick.active && minD < 1.0)) && !this.interactCooldown) {
+            this.handleInteraction(nearest);
+            this.interactCooldown = true;
+            setTimeout(() => this.interactCooldown = false, 500); 
+        }
+    } else {
+        prompt.style.display = 'none';
+    }
+    
+    if (this.universe.keys.e) this.universe.keys.e = false;
+  }
+
+  async handleInteraction(target) {
+      if (this.interactCooldown) return;
+      this.interactCooldown = true;
+      setTimeout(() => this.interactCooldown = false, 500);
+
+      if (target.type === 'dir') {
+          this.loadLevel(target.targetPath);
+      } else if (target.type === 'back') {
+          const parentPath = await dirname(this.currentPath);
+          if (parentPath !== this.currentPath) { // Check if we actually moved up
+              this.loadLevel(parentPath);
+          } else {
+              // If already at drive root (e.g. C:/), then just stay or go to initialRootPath
+              this.loadLevel(this.initialRootPath); // Go back to the initial city view
+          }
+      } else if (target.type === 'file') {
+          console.log("Opening:", target.targetPath);
+          shellOpen(target.targetPath);
+      }
   }
 }

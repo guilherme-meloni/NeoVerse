@@ -74,7 +74,7 @@ async function init() {
             defaultPath: await homeDir()
         });
         if (selected) {
-            // universe.enterFPS(); // Removed auto-FPS
+            universe.enterFPS(); // Auto enter FPS mode
             cityManager.startCity(selected);
         }
       } catch(e) { console.error(e); }

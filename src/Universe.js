@@ -43,6 +43,10 @@ export class Universe {
     this.dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     this.offset = new THREE.Vector3();
 
+    // Physics & Collision
+    this.colliders = []; // Array of THREE.Box3
+    this.playerBox = new THREE.Box3();
+
     // Controles de câmera 3D
     this.cameraRotation = { x: 0, y: 0 };
     this.cameraTarget = new THREE.Vector3(0, 0, 0); // Ponto central de rotação (Blender style)
@@ -53,6 +57,7 @@ export class Universe {
 
     // Controles FPS
     this.keys = { w: false, a: false, s: false, d: false, shift: false, space: false };
+    this.joystick = { active: false, dx: 0, dy: 0, originX: 0, originY: 0 }; // Mobile Joystick
     this.fpsYaw = Math.PI;
     this.fpsPitch = 0;
     this.gravity = -0.02;
@@ -570,7 +575,12 @@ export class Universe {
         // Primitives
         switch (type) {
           case 'sphere': mesh = new THREE.Mesh(new THREE.SphereGeometry(properties.scale || 1, segs, segs), this.getMaterial(properties.color)); break;
-          case 'cube': mesh = new THREE.Mesh(new THREE.BoxGeometry(properties.scale, properties.scale, properties.scale), this.getMaterial(properties.color)); break;
+          case 'cube': 
+            const sx = properties.scaleX || properties.scale || 1;
+            const sy = properties.scaleY || properties.scale || 1;
+            const sz = properties.scaleZ || properties.scale || 1;
+            mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), this.getMaterial(properties.color)); 
+            break;
           case 'node': mesh = new THREE.Mesh(new THREE.SphereGeometry(0.3 * properties.scale, 32, 32), this.getMaterial(properties.color, true)); break;
           case 'pyramid': mesh = new THREE.Mesh(new THREE.ConeGeometry(properties.scale, properties.scale * 1.5, 4), this.getMaterial(properties.color)); break;
           case 'torus': mesh = new THREE.Mesh(new THREE.TorusGeometry(properties.scale, 0.3, 16, 32), this.getMaterial(properties.color)); break;
@@ -732,6 +742,33 @@ export class Universe {
       // Optional
   }
 
+  setEnvironment(type) {
+    if (type === 'city') {
+        this.scene.background = new THREE.Color(0x000510);
+        this.scene.fog = new THREE.FogExp2(0x000510, 0.02);
+        this.lightsGroup.visible = true;
+    } else if (type === 'lobby') {
+        this.scene.background = new THREE.Color(0x050505);
+        this.scene.fog = new THREE.FogExp2(0x050505, 0.06);
+        this.lightsGroup.visible = true; // Maybe dim lights for indoors?
+    }
+  }
+
+  checkCollision(pos) {
+    if (!this.player) return false;
+    
+    const size = 0.3; // Player radius
+    this.playerBox.min.set(pos.x - size, pos.y - 0.1, pos.z - size);
+    this.playerBox.max.set(pos.x + size, pos.y + 1.6, pos.z + size);
+
+    for (const box of this.colliders) {
+        if (this.playerBox.intersectsBox(box)) {
+            return true;
+        }
+    }
+    return false;
+  }
+
   setupControls() {
     // Keys
     document.addEventListener('keydown', (e) => {
@@ -757,6 +794,55 @@ export class Universe {
       if(e.key === 'ArrowRight') this.keys.arrowRight = false;
       if(k === ' ') this.keys.space = false;
     });
+
+    // Joystick Controls (Mobile)
+    const stickZone = document.getElementById('joystick-zone');
+    const stickKnob = document.getElementById('joystick-knob');
+    
+    if (stickZone && 'ontouchstart' in window) {
+        stickZone.style.display = 'block';
+        
+        stickZone.addEventListener('touchstart', (e) => {
+            const touch = e.changedTouches[0];
+            this.joystick.active = true;
+            this.joystick.originX = touch.clientX;
+            this.joystick.originY = touch.clientY;
+            e.preventDefault();
+        }, {passive: false});
+
+        stickZone.addEventListener('touchmove', (e) => {
+            if(!this.joystick.active) return;
+            const touch = e.changedTouches[0];
+            const maxDist = 40;
+            
+            let dx = touch.clientX - this.joystick.originX;
+            let dy = touch.clientY - this.joystick.originY;
+            
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist > maxDist) {
+                const ratio = maxDist / dist;
+                dx *= ratio;
+                dy *= ratio;
+            }
+            
+            stickKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+            
+            // Normalize -1 to 1
+            this.joystick.dx = dx / maxDist;
+            this.joystick.dy = dy / maxDist;
+            e.preventDefault();
+        }, {passive: false});
+
+        const endStick = (e) => {
+            this.joystick.active = false;
+            this.joystick.dx = 0;
+            this.joystick.dy = 0;
+            stickKnob.style.transform = `translate(-50%, -50%)`;
+        };
+        
+        stickZone.addEventListener('touchend', endStick);
+        stickZone.addEventListener('touchcancel', endStick);
+    }
 
     // Mouse Move (FPS & Dragging & Blender Controls)
     document.addEventListener('mousemove', (e) => {
@@ -991,33 +1077,66 @@ export class Universe {
 
     try {
         if (this.viewMode === 'fps' && this.player) {
-          const speed = this.keys.shift ? 0.4 : 0.2; // Sightly faster
+          const speed = this.keys.shift ? 0.3 : 0.15; // Adjusted speed
           
-          // --- NEW MOVEMENT LOGIC (Camera Relative) ---
-          // Get the direction the camera is looking
+          // --- MOVEMENT VECTORS ---
           const forward = new THREE.Vector3();
           this.camera.getWorldDirection(forward);
-          forward.y = 0; // Flatten (don't fly up/down)
+          forward.y = 0; 
           forward.normalize();
 
           const right = new THREE.Vector3();
           right.crossVectors(forward, this.camera.up).normalize();
 
-          if (this.keys.w) this.player.position.add(forward.clone().multiplyScalar(speed));
-          if (this.keys.s) this.player.position.add(forward.clone().multiplyScalar(-speed));
-          if (this.keys.d) this.player.position.add(right.clone().multiplyScalar(speed));
-          if (this.keys.a) this.player.position.add(right.clone().multiplyScalar(-speed));
+          // Calculate Move Input
+          let dx = 0;
+          let dz = 0;
+
+          // Keyboard
+          if (this.keys.w) { dx += forward.x; dz += forward.z; }
+          if (this.keys.s) { dx -= forward.x; dz -= forward.z; }
+          if (this.keys.d) { dx += right.x; dz += right.z; }
+          if (this.keys.a) { dx -= right.x; dz -= right.z; }
+
+          // Joystick
+          if (this.joystick.active) {
+              const joyFwd = -this.joystick.dy;
+              const joyRight = this.joystick.dx;
+              dx += (forward.x * joyFwd + right.x * joyRight);
+              dz += (forward.z * joyFwd + right.z * joyRight);
+          }
+
+          // Apply Movement with Collision Check (X Axis)
+          if (dx !== 0 || dz !== 0) {
+              // Normalize if moving diagonally to prevent super-speed, unless joystick which is already analog
+              if (!this.joystick.active && (dx !== 0 && dz !== 0)) {
+                  const len = Math.sqrt(dx*dx + dz*dz);
+                  dx /= len; dz /= len;
+              }
+              
+              const moveX = dx * speed;
+              const nextPos = this.player.position.clone();
+              nextPos.x += moveX;
+              
+              if (!this.checkCollision(nextPos)) {
+                  this.player.position.x = nextPos.x;
+              }
+
+              // Apply Movement with Collision Check (Z Axis)
+              const moveZ = dz * speed;
+              nextPos.copy(this.player.position); // Reset to current valid pos
+              nextPos.z += moveZ;
+
+              if (!this.checkCollision(nextPos)) {
+                  this.player.position.z = nextPos.z;
+              }
+          }
           
           // --- ROTATION (Mouse Look) ---
-          // Update Yaw/Pitch from mouse movement (handled in mousemove event)
-          // We apply the rotation to the Camera primarily
           this.camera.rotation.order = 'YXZ';
           this.camera.rotation.y = this.fpsYaw;
           this.camera.rotation.x = this.fpsPitch;
 
-          // Sync player body rotation to camera yaw (so the body faces where we look)
-          // but we usually just move the position.
-          
           // --- PHYSICS (Gravity) ---
           if(this.keys.space && this.isGrounded) {
               this.playerVelocity.y = this.jumpPower;
@@ -1027,6 +1146,7 @@ export class Universe {
           
           this.player.position.y += this.playerVelocity.y;
           
+          // Floor / Ground Collision
           if(this.player.position.y < 0.1) {
               this.player.position.y = 0.1;
               this.playerVelocity.y = 0;
