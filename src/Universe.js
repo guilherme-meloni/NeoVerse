@@ -32,7 +32,9 @@ export class Universe {
 
     // Controles de câmera 3D
     this.cameraRotation = { x: 0, y: 0 };
+    this.cameraTarget = new THREE.Vector3(0, 0, 0); // Ponto central de rotação (Blender style)
     this.isRotating = false;
+    this.isPanning = false; // Novo estado para Pan
     this.lastMouseX = 0;
     this.lastMouseY = 0;
 
@@ -389,24 +391,26 @@ export class Universe {
       if(k === ' ') this.keys.space = false;
     });
 
-    // Mouse Move (FPS & Dragging)
+    // Mouse Move (FPS & Dragging & Blender Controls)
     document.addEventListener('mousemove', (e) => {
       // FPS Logic
       if (this.viewMode === 'fps') {
-          // If locked, use movementX
           if (document.pointerLockElement === this.canvas) {
             this.fpsYaw -= e.movementX * 0.002;
             this.fpsPitch -= e.movementY * 0.002;
             this.fpsPitch = Math.max(-1.5, Math.min(1.5, this.fpsPitch));
           }
-          // If NOT locked (Fallback), maybe ignore mouse or allow drag? 
-          // Let's rely on keys for fallback to avoid erratic behavior.
           return;
       } 
       
-      // 3D Logic
+      // 3D Logic (Blender Style)
       if (this.viewMode === '3d') {
-          // Drag Logic
+          const dx = e.clientX - this.lastMouseX;
+          const dy = e.clientY - this.lastMouseY;
+          this.lastMouseX = e.clientX;
+          this.lastMouseY = e.clientY;
+
+          // 1. Dragging Object (Left Click)
           if (this.isDragging && this.selectedObject) {
               this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
               this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
@@ -417,98 +421,140 @@ export class Universe {
               
               if (intersectPoint) {
                   const newPos = intersectPoint.sub(this.offset);
-                  newPos.y = Math.max(0.5, newPos.y); // Keep above floor
+                  newPos.y = Math.max(0.5, newPos.y); 
                   this.selectedObject.position.copy(newPos);
-                  
-                  // Optional: dispatch event if needed
-                  // window.dispatchEvent(new CustomEvent('object-moved', ...));
               }
               return;
           }
 
-          // Orbit Logic
+          // 2. Panning (Shift + Middle Mouse)
+          if (this.isPanning) {
+              const panSpeed = 0.02 * (this.cameraDistance / 10); // Scale pan speed with zoom
+              
+              // Calculate Camera Right and Up vectors
+              const right = new THREE.Vector3();
+              this.camera.getWorldDirection(right);
+              right.cross(this.camera.up).normalize();
+              
+              const up = new THREE.Vector3(0, 1, 0);
+              up.applyQuaternion(this.camera.quaternion);
+
+              // Move Target AND Camera
+              const moveX = right.multiplyScalar(-dx * panSpeed);
+              const moveY = up.multiplyScalar(dy * panSpeed); // Blender style: Down moves view up
+              
+              const combinedMove = moveX.add(moveY);
+              this.camera.position.add(combinedMove);
+              this.cameraTarget.add(combinedMove);
+              return;
+          }
+
+          // 3. Orbit Rotation (Middle Mouse)
           if (this.isRotating) {
-            const dx = e.clientX - this.lastMouseX;
-            const dy = e.clientY - this.lastMouseY;
             this.cameraRotation.y += dx * 0.005;
             this.cameraRotation.x += dy * 0.005;
             this.cameraRotation.x = Math.max(-1.5, Math.min(1.5, this.cameraRotation.x));
             
+            // Re-calculate position based on Target + Spherical Coordinates
             const r = this.cameraDistance;
-            this.camera.position.x = r * Math.sin(this.cameraRotation.y) * Math.cos(this.cameraRotation.x);
-            this.camera.position.y = r * Math.sin(this.cameraRotation.x) + 5;
-            this.camera.position.z = r * Math.cos(this.cameraRotation.y) * Math.cos(this.cameraRotation.x);
-            this.camera.lookAt(0,0,0);
+            const cx = r * Math.sin(this.cameraRotation.y) * Math.cos(this.cameraRotation.x);
+            const cy = r * Math.sin(this.cameraRotation.x);
+            const cz = r * Math.cos(this.cameraRotation.y) * Math.cos(this.cameraRotation.x);
             
-            this.lastMouseX = e.clientX;
-            this.lastMouseY = e.clientY;
+            this.camera.position.set(
+                this.cameraTarget.x + cx,
+                this.cameraTarget.y + cy + 5, // Offset height slightly
+                this.cameraTarget.z + cz
+            );
+            this.camera.lookAt(this.cameraTarget);
           }
       }
     });
 
-    // Mouse Down (Select & Start Drag)
+    // Mouse Down
     this.canvas.addEventListener('mousedown', (e) => {
+      this.lastMouseX = e.clientX;
+      this.lastMouseY = e.clientY;
+
       if (this.viewMode === '3d') {
+          // Button 1 = Middle Mouse (Scroll Wheel Click)
+          if (e.button === 1) {
+              e.preventDefault(); // Prevent scroll icon or paste
+              if (e.shiftKey) {
+                  this.isPanning = true;
+                  this.canvas.style.cursor = 'move';
+              } else {
+                  this.isRotating = true;
+                  this.canvas.style.cursor = 'all-scroll';
+              }
+              return;
+          }
+
+          // Button 0 = Left Click (Select / Drag)
           if (e.button === 0) {
               this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
               this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
               this.raycaster.setFromCamera(this.mouse, this.camera);
               
-              // Filter out ghost objects or non-selectable
               const objects = Array.from(this.objects.values()).filter(o => !o.userData.isGhost);
               const intersects = this.raycaster.intersectObjects(objects);
               
               if(intersects.length > 0) {
                   this.selectedObject = intersects[0].object;
                   this.isDragging = true;
-                  
-                  // Setup Drag Plane at object position facing Up
                   this.dragPlane.setFromNormalAndCoplanarPoint(
                       new THREE.Vector3(0, 1, 0), 
                       this.selectedObject.position
                   );
-                  
-                  // Calculate Offset to prevent jumping
                   const intersectPoint = new THREE.Vector3();
                   this.raycaster.ray.intersectPlane(this.dragPlane, intersectPoint);
                   this.offset.copy(intersectPoint).sub(this.selectedObject.position);
-                  
                   this.canvas.style.cursor = 'grabbing';
-              } else {
-                  // If clicked on nothing, rotate camera
-                  this.isRotating = true;
-                  this.lastMouseX = e.clientX;
-                  this.lastMouseY = e.clientY;
-                  this.canvas.style.cursor = 'move';
               }
           }
       } else {
-          // FPS: Lock pointer if not locked
-          if(document.pointerLockElement !== this.canvas) this.canvas.requestPointerLock();
+          // FPS Mode: Click to lock
+          if(document.pointerLockElement !== this.canvas) {
+              // Try unadjusted first (for gaming mice/linux)
+              this.canvas.requestPointerLock({ unadjustedMovement: true }).catch(() => {
+                  this.canvas.requestPointerLock().catch(console.error);
+              });
+          }
       }
     });
 
     window.addEventListener('mouseup', () => {
       this.isRotating = false;
+      this.isPanning = false;
       this.isDragging = false;
-      this.selectedObject = null; // Deselect on release? Or keep selected? 
-      // User asked to drag, so we release drag state but maybe keep selection for menu.
-      // For now, let's just stop dragging.
+      this.selectedObject = null;
       this.canvas.style.cursor = 'default';
     });
     
-    // Zoom
+    // Zoom (Blender Style)
     this.canvas.addEventListener('wheel', (e) => {
         if(this.viewMode === '3d') {
-            this.cameraDistance += e.deltaY * 0.01;
-            this.cameraDistance = Math.max(5, Math.min(50, this.cameraDistance));
+            e.preventDefault();
+            const zoomSpeed = 0.05 * this.cameraDistance;
+            const delta = Math.sign(e.deltaY) * zoomSpeed * 0.1;
+            
+            this.cameraDistance += delta;
+            this.cameraDistance = Math.max(2, Math.min(100, this.cameraDistance));
+            
+            // Re-apply orbit position logic immediately
             const r = this.cameraDistance;
-            this.camera.position.x = r * Math.sin(this.cameraRotation.y) * Math.cos(this.cameraRotation.x);
-            this.camera.position.y = r * Math.sin(this.cameraRotation.x) + 5;
-            this.camera.position.z = r * Math.cos(this.cameraRotation.y) * Math.cos(this.cameraRotation.x);
-            this.camera.lookAt(0,0,0);
+            const cx = r * Math.sin(this.cameraRotation.y) * Math.cos(this.cameraRotation.x);
+            const cy = r * Math.sin(this.cameraRotation.x);
+            const cz = r * Math.cos(this.cameraRotation.y) * Math.cos(this.cameraRotation.x);
+            
+            this.camera.position.set(
+                this.cameraTarget.x + cx,
+                this.cameraTarget.y + cy + 5,
+                this.cameraTarget.z + cz
+            );
+            this.camera.lookAt(this.cameraTarget);
         }
-    });
+    }, { passive: false });
   }
 
   onResize() {
