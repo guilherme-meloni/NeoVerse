@@ -593,13 +593,19 @@ export class ObjectManager {
 
             this.universe.addObject(type, position, properties, id, false);
             this.myObjects.add(id);
-            this.allObjects.set(id, {
+            
+            const objData = {
                 id,
                 type,
                 position,
                 properties,
                 ownerId: this.windowManager.label
-            });
+            };
+            
+            this.allObjects.set(id, objData);
+            
+            // Broadcast to other windows so they can see these files as ghosts
+            emit('object-add', objData);
         });
         
         // Move player nearby
