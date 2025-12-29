@@ -51,6 +51,11 @@
       font-size: 13px;
     }
 
+    #hud.fps-mode h2 {
+      color: #ff0;
+      animation: pulse 1s infinite;
+    }
+
     .status-row {
       margin: 3px 0;
       display: flex;
@@ -195,7 +200,6 @@
       to { transform: translateY(0); opacity: 1; }
     }
 
-    /* Otimizações para hardware fraco */
     * {
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
@@ -213,6 +217,46 @@
       background: rgba(0, 255, 0, 0.3);
       border-radius: 3px;
     }
+
+    #crosshair {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 20px;
+      height: 20px;
+      display: none;
+      z-index: 9999;
+      pointer-events: none;
+    }
+
+    #crosshair::before,
+    #crosshair::after {
+      content: '';
+      position: absolute;
+      background: #0ff;
+      box-shadow: 0 0 5px #0ff;
+    }
+
+    #crosshair::before {
+      top: 50%;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      transform: translateY(-50%);
+    }
+
+    #crosshair::after {
+      left: 50%;
+      top: 0;
+      width: 2px;
+      height: 100%;
+      transform: translateX(-50%);
+    }
+
+    #crosshair.active {
+      display: block;
+    }
   </style>
 </head>
 <body>
@@ -226,6 +270,12 @@
     </div>
     <div class="status-row">
       🪟 #<span id="window-id">1</span>
+    </div>
+    <div class="status-row" id="player-status" style="display:none;">
+      🧍 Player: ✓
+    </div>
+    <div class="status-row" id="view-mode" style="display:none;">
+      👁️ Visão: <span id="view-text">3D</span>
     </div>
     <div class="status-row">
       🎯 Objetos: <span id="object-count">0</span>
@@ -248,14 +298,17 @@
 
   <div id="controls">
     <button class="btn" id="new-window-btn">🪟 Nova</button>
+    <button class="btn" id="view-btn" style="display:none;">👁️ FPS</button>
     <button class="btn" id="sphere-btn">🔵</button>
     <button class="btn" id="cube-btn">🧊</button>
     <button class="btn" id="node-btn">⭐</button>
   </div>
 
   <div id="info">
-    💡 Clique e arraste objetos • Arrastar janelas = mesclar
+    💡 V = FPS • Mouse = Olhar • WASD = Mover • Shift = Correr
   </div>
+
+  <div id="crosshair"></div>
 
   <script type="importmap">
     {
