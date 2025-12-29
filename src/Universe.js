@@ -853,6 +853,30 @@ export class Universe {
     }
   }
 
+  clearScene() {
+    // Remove all objects tracked in this.objects
+    this.objects.forEach(obj => {
+        this.scene.remove(obj);
+        if(obj.geometry) obj.geometry.dispose();
+        if(obj.material) obj.material.dispose();
+    });
+    this.objects.clear();
+
+    // Remove other children that are meshes but not player/lights
+    for (let i = this.scene.children.length - 1; i >= 0; i--) {
+        const child = this.scene.children[i];
+        if (child !== this.player && child !== this.lightsGroup && child !== this.camera && child !== this.stars && child !== this.floor) {
+            this.scene.remove(child);
+        }
+    }
+  }
+
+  setCyberpunkAtmosphere() {
+    this.scene.background = new THREE.Color(0x050510);
+    this.scene.fog = new THREE.FogExp2(0x050510, 0.02);
+    this.lightsGroup.visible = true;
+  }
+
   cleanup() {
     if(this.animationId) cancelAnimationFrame(this.animationId);
     this.renderer.dispose();

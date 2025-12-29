@@ -65,7 +65,7 @@
     },
     "bundle": {
       "active": true,
-      "targets": ["deb", "appimage", "msi"],
+      "targets": ["deb", "appimage", "nsis"],
       "identifier": "com.multiuniverse.app"
     },
     "security": {

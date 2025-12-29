@@ -2,12 +2,16 @@ import { WindowManager } from './WindowManager.js';
 import { Universe } from './Universe.js';
 import { ObjectManager } from './ObjectManager.js';
 import { NetworkManager } from './NetworkManager.js';
+import { CityManager } from './CityManager.js'; // Import
 import { WebviewWindow } from '@tauri-apps/api/window';
+import { open as dialogOpen } from '@tauri-apps/api/dialog';
+import { homeDir } from '@tauri-apps/api/path';
 
 let windowManager;
 let universe;
 let objectManager;
 let networkManager;
+let cityManager; // Var
 
 async function init() {
   console.log('🚀 Iniciando Multi Universe UI...');
@@ -29,6 +33,7 @@ async function init() {
   networkManager = new NetworkManager(windowManager, null);
   objectManager = new ObjectManager(windowManager, universe, networkManager);
   networkManager.objectManager = objectManager;
+  cityManager = new CityManager(universe, windowManager); // Init
 
   // Expose quality switcher to global scope for HTML buttons
   window.setQuality = (mode) => {
@@ -56,12 +61,38 @@ async function init() {
       if(code.length === 6) networkManager.mergeWithUniverse(code);
   };
 
+  // City Func
+  window.createCity = async () => {
+      try {
+        const selected = await dialogOpen({
+            directory: true,
+            multiple: false,
+            defaultPath: await homeDir()
+        });
+        if (selected) {
+            // universe.enterFPS(); // Removed auto-FPS
+            cityManager.startCity(selected);
+        }
+      } catch(e) { console.error(e); }
+  };
+
   // Setup UI Listeners
   setupUI();
 
-  // Update loop for FPS counter
+  // Update loop
   let lastTime = performance.now();
   let frames = 0;
+  
+  // Hook into animation loop for city logic
+  const originalAnimate = universe.animate.bind(universe);
+  universe.animate = () => {
+      originalAnimate(); // Draw scene
+      // City Logic Update
+      if (universe.player) {
+          cityManager.update(universe.player.position);
+      }
+  };
+
   setInterval(() => {
       const t = performance.now();
       frames++;
@@ -70,7 +101,7 @@ async function init() {
           frames = 0;
           lastTime = t;
       }
-  }, 1000); // Simple FPS counter independent of logic loop
+  }, 1000);
 
   console.log('✅ UI Ready');
 }
