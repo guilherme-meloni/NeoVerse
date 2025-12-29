@@ -18,11 +18,11 @@ export class Universe {
     this.viewMode = '3d';
     this.cameraDistance = 12;
 
-    // FPS settings otimizados para hardware fraco
+    // FPS settings otimizados para hardware fraco (EXTREMO)
     this.fpsSettings = {
-      pixelRatio: 0.5, // Reduz resolução drasticamente
-      renderDistance: 30, // Fog mais próximo
-      maxFPS: 30 // Limita FPS para economizar
+      pixelRatio: 0.4, // Resolução muito baixa (estilo retro)
+      renderDistance: 20, // Fog bem perto
+      maxFPS: 24 // Cinematográfico/Mínimo jogável
     };
 
     // Raycaster para seleção
@@ -81,13 +81,11 @@ export class Universe {
     this.renderer.setPixelRatio(1); // Força 1:1 no modo 3D
     this.renderer.shadowMap.enabled = false; // Sem sombras
 
-    // Iluminação simplificada
-    const ambientLight = new THREE.AmbientLight(0x404040, 1.5);
-    this.scene.add(ambientLight);
-
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
-    directionalLight.position.set(5, 10, 5);
-    this.scene.add(directionalLight);
+    // Iluminação removida (MeshBasicMaterial não usa luz, economiza CPU)
+    // const ambientLight = new THREE.AmbientLight(0x404040, 1.5);
+    // this.scene.add(ambientLight);
+    // const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    // ...
 
     // Grid simples
     const gridHelper = new THREE.GridHelper(20, 10, 0x00ff00, 0x003300);
@@ -585,8 +583,8 @@ export class Universe {
   }
 
   createSphere(position, properties) {
-    // Reduzido de 16 para 8 segmentos
-    const geometry = new THREE.SphereGeometry(properties.scale || 1, 8, 8);
+    // Reduzido para o mínimo (low poly extremo)
+    const geometry = new THREE.SphereGeometry(properties.scale || 1, 6, 4);
     const material = new THREE.MeshBasicMaterial({ // MeshBasic é mais leve
       color: properties.color || 0xff00ff
     });
@@ -643,7 +641,7 @@ export class Universe {
   }
 
   createTorus(position, properties) {
-    const geometry = new THREE.TorusGeometry(properties.scale || 1, 0.3, 8, 16); // Reduzido segmentos
+    const geometry = new THREE.TorusGeometry(properties.scale || 1, 0.3, 5, 8); // Muito low poly
     const material = new THREE.MeshBasicMaterial({
       color: properties.color || 0xff0088
     });
@@ -659,7 +657,7 @@ export class Universe {
       properties.scale * 0.5 || 0.5,
       properties.scale * 0.5 || 0.5,
       properties.scale * 2 || 2,
-      8 // Reduzido de 16 para 8 segmentos
+      6 // Hexágono
     );
     const material = new THREE.MeshBasicMaterial({
       color: properties.color || 0x0088ff
