@@ -94,6 +94,9 @@
       display: flex;
       gap: 5px;
       z-index: 1000;
+      flex-wrap: wrap;
+      max-width: 90%;
+      justify-content: center;
     }
 
     .btn {
@@ -167,7 +170,7 @@
 
     #info {
       position: fixed;
-      bottom: 50px;
+      bottom: 60px;
       left: 50%;
       transform: translateX(-50%);
       background: rgba(0, 255, 255, 0.1);
@@ -179,6 +182,7 @@
       z-index: 1000;
       pointer-events: none;
       user-select: none;
+      text-align: center;
     }
 
     .tooltip {
@@ -257,6 +261,303 @@
     #crosshair.active {
       display: block;
     }
+
+    /* Menu de Edição - NO CANTO PARA NÃO ATRAPALHAR */
+    #edit-menu {
+      position: fixed;
+      top: 280px;
+      right: 10px;
+      z-index: 5000;
+      animation: slideInRight 0.3s;
+    }
+
+    @keyframes slideInRight {
+      from { opacity: 0; transform: translateX(100px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    .edit-panel {
+      background: rgba(0, 0, 0, 0.95);
+      border: 2px solid #0ff;
+      border-radius: 8px;
+      padding: 12px;
+      width: 250px;
+      box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+    }
+
+    .edit-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      border-bottom: 1px solid #0ff;
+      padding-bottom: 8px;
+    }
+
+    .edit-header h3 {
+      color: #0ff;
+      font-size: 12px;
+      margin: 0;
+    }
+
+    .close-btn {
+      background: rgba(255, 0, 0, 0.2);
+      border: 1px solid #f00;
+      color: #f00;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: monospace;
+      font-weight: bold;
+      font-size: 10px;
+      transition: all 0.2s;
+    }
+
+    .close-btn:hover {
+      background: rgba(255, 0, 0, 0.4);
+    }
+
+    .edit-content {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .edit-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .edit-row label {
+      color: #0f0;
+      font-size: 10px;
+      font-weight: bold;
+    }
+
+    .edit-row input[type="color"] {
+      width: 100%;
+      height: 35px;
+      border: 1px solid #0f0;
+      border-radius: 4px;
+      cursor: pointer;
+      background: #000;
+    }
+
+    .edit-row input[type="range"] {
+      width: 100%;
+      height: 5px;
+      background: rgba(0, 255, 0, 0.2);
+      outline: none;
+      border-radius: 5px;
+    }
+
+    .edit-row input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 15px;
+      height: 15px;
+      background: #0f0;
+      cursor: pointer;
+      border-radius: 50%;
+      box-shadow: 0 0 5px #0f0;
+    }
+
+    .edit-row input[type="checkbox"] {
+      width: 15px;
+      height: 15px;
+      cursor: pointer;
+      margin-right: 5px;
+    }
+
+    .edit-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .btn-apply {
+      flex: 1;
+      padding: 8px;
+      background: rgba(0, 255, 0, 0.2);
+      border: 1px solid #0f0;
+      color: #0f0;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: monospace;
+      font-weight: bold;
+      font-size: 10px;
+      transition: all 0.2s;
+    }
+
+    .btn-apply:hover {
+      background: rgba(0, 255, 0, 0.4);
+    }
+
+    .btn-delete {
+      flex: 1;
+      padding: 8px;
+      background: rgba(255, 0, 0, 0.2);
+      border: 1px solid #f00;
+      color: #f00;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: monospace;
+      font-weight: bold;
+      font-size: 10px;
+      transition: all 0.2s;
+    }
+
+    .btn-delete:hover {
+      background: rgba(255, 0, 0, 0.4);
+    }
+
+    #scale-value {
+      color: #0ff;
+      font-weight: bold;
+    }
+
+    /* Painel de Rede */
+    #network-panel {
+      position: fixed;
+      bottom: 60px;
+      left: 10px;
+      z-index: 5000;
+      animation: slideInLeft 0.3s;
+    }
+
+    @keyframes slideInLeft {
+      from { opacity: 0; transform: translateX(-100px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    .network-content {
+      background: rgba(0, 0, 0, 0.95);
+      border: 2px solid #0ff;
+      border-radius: 8px;
+      padding: 12px;
+      width: 280px;
+      box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+    }
+
+    .network-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      border-bottom: 1px solid #0ff;
+      padding-bottom: 8px;
+    }
+
+    .network-header h3 {
+      color: #0ff;
+      font-size: 12px;
+      margin: 0;
+    }
+
+    .network-body {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .network-row {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .network-row label {
+      color: #0f0;
+      font-size: 10px;
+      font-weight: bold;
+    }
+
+    .code-display {
+      background: rgba(0, 255, 255, 0.2);
+      border: 1px solid #0ff;
+      border-radius: 4px;
+      padding: 8px;
+      text-align: center;
+      font-size: 18px;
+      font-weight: bold;
+      letter-spacing: 3px;
+      color: #0ff;
+      font-family: monospace;
+    }
+
+    #remote-code-input {
+      background: rgba(0, 0, 0, 0.8);
+      border: 1px solid #0f0;
+      border-radius: 4px;
+      padding: 8px;
+      color: #0f0;
+      font-size: 14px;
+      font-weight: bold;
+      letter-spacing: 2px;
+      text-align: center;
+      font-family: monospace;
+      text-transform: uppercase;
+    }
+
+    #remote-code-input:focus {
+      outline: none;
+      border-color: #0ff;
+      box-shadow: 0 0 5px #0ff;
+    }
+
+    .btn-connect {
+      background: rgba(0, 255, 0, 0.2);
+      border: 1px solid #0f0;
+      color: #0f0;
+      padding: 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: monospace;
+      font-weight: bold;
+      font-size: 10px;
+      transition: all 0.2s;
+    }
+
+    .btn-connect:hover {
+      background: rgba(0, 255, 0, 0.4);
+    }
+
+    .btn-toggle {
+      background: rgba(0, 255, 255, 0.2);
+      border: 1px solid #0ff;
+      color: #0ff;
+      padding: 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: monospace;
+      font-weight: bold;
+      font-size: 10px;
+      transition: all 0.2s;
+    }
+
+    .btn-toggle:hover {
+      background: rgba(0, 255, 255, 0.4);
+    }
+
+    .btn-toggle.connected {
+      background: rgba(0, 255, 0, 0.2);
+      border-color: #0f0;
+      color: #0f0;
+    }
+
+    .network-info {
+      margin-top: 5px;
+      padding: 8px;
+      background: rgba(0, 255, 255, 0.1);
+      border-radius: 4px;
+      border-left: 2px solid #0ff;
+    }
+
+    .network-info small {
+      color: #0ff;
+      font-size: 9px;
+      line-height: 1.4;
+    }
   </style>
 </head>
 <body>
@@ -286,6 +587,15 @@
     <div class="status-row">
       ⚡ Overlaps: <span id="overlap-count">0</span>
     </div>
+    <div class="status-row">
+      🌐 Rede: <span id="network-status" style="color:#f00;">Offline</span>
+    </div>
+    <div class="status-row">
+      🔑 Código: <span id="network-code" style="color:#0ff;">------</span>
+    </div>
+    <div class="status-row">
+      🔗 Remotos: <span id="merged-count">0</span>
+    </div>
     <div class="status-row" style="font-size: 9px; color: #888; margin-top: 5px;">
       💻 RAM: <span id="memory">--</span>
     </div>
@@ -299,13 +609,48 @@
   <div id="controls">
     <button class="btn" id="new-window-btn">🪟 Nova</button>
     <button class="btn" id="view-btn" style="display:none;">👁️ FPS</button>
+    <button class="btn" id="network-btn">🌐 Rede</button>
     <button class="btn" id="sphere-btn">🔵</button>
     <button class="btn" id="cube-btn">🧊</button>
     <button class="btn" id="node-btn">⭐</button>
+    <button class="btn" id="pyramid-btn">🔺</button>
+    <button class="btn" id="torus-btn">🍩</button>
+    <button class="btn" id="cylinder-btn">🥫</button>
+  </div>
+
+  <div id="network-panel" style="display:none;">
+    <div class="network-content">
+      <div class="network-header">
+        <h3>🌐 Conexão Remota</h3>
+        <button class="close-btn" onclick="window.closeNetworkPanel()">✕</button>
+      </div>
+      
+      <div class="network-body">
+        <div class="network-row">
+          <label>Seu Código:</label>
+          <div class="code-display" id="my-code-display">------</div>
+        </div>
+        
+        <div class="network-row">
+          <label>Conectar a:</label>
+          <input type="text" id="remote-code-input" placeholder="ABC123" maxlength="6" style="text-transform:uppercase;">
+          <button class="btn-connect" onclick="window.connectRemote()">🔗 Conectar</button>
+        </div>
+
+        <div class="network-row">
+          <button class="btn-toggle" id="network-toggle" onclick="window.toggleNetwork()">🔌 Conectar Servidor</button>
+        </div>
+
+        <div class="network-info">
+          <small>💡 Digite um código de 6 caracteres para mesclar com outro universo remoto</small>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="info">
-    💡 V = FPS • Mouse = Olhar • WASD = Mover • Shift = Correr
+    💡 V = FPS • ESC = Sair FPS • Mouse = Olhar • WASD = Mover • Shift = Correr • Space = Pular<br>
+    🖱️ Clique em objetos para editar • Delete = Remover
   </div>
 
   <div id="crosshair"></div>

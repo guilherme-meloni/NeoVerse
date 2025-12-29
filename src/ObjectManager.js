@@ -1,13 +1,16 @@
 import { emit, listen } from '@tauri-apps/api/event';
 
 export class ObjectManager {
-  constructor(windowManager, universe) {
+  constructor(windowManager, universe, networkManager = null) {
     this.windowManager = windowManager;
     this.universe = universe;
+    this.networkManager = networkManager;
     this.myObjects = new Set();
     this.allObjects = new Map();
+    this.remoteObjects = new Map(); // Objetos de universos remotos
     this.selectedObject = null;
-    
+    this.editingObject = null;
+
     this.init();
   }
 
@@ -28,6 +31,11 @@ export class ObjectManager {
       this.handleObjectRemove(id);
     });
 
+    await listen('object-update', (event) => {
+      const { id, properties } = event.payload;
+      this.handleObjectUpdate(id, properties);
+    });
+
     await listen('object-request', async () => {
       // Envia nossos objetos para quem pediu
       for (const id of this.myObjects) {
@@ -37,37 +45,46 @@ export class ObjectManager {
         }
       }
     });
-    
+
     // Listener de overlaps
     window.addEventListener('overlaps-changed', (e) => {
       this.handleOverlaps(e.detail.overlapping);
     });
-    
+
     // Listener de movimento local
     window.addEventListener('object-moved', async (e) => {
       const { id, position } = e.detail;
       if (this.myObjects.has(id)) {
-        await emit('object-move', { id, position });
+        const objData = this.allObjects.get(id);
+        if (objData) {
+          objData.position = position;
+          await emit('object-move', { id, position });
+        }
       }
     });
-    
-    // Listener de seleção (para UI)
+
+    // Listener de seleção de objeto
+    window.addEventListener('object-selected', (e) => {
+      this.showEditMenu(e.detail.object);
+    });
+
+    // Listener de clique na lista
     window.addEventListener('click', (e) => {
       if (e.target.classList.contains('object-item')) {
         const id = e.target.dataset.id;
         this.selectObject(id);
       }
     });
-    
+
     // Solicita objetos existentes
     await emit('object-request', {});
-    
+
     console.log('📦 ObjectManager iniciado');
   }
 
   handleObjectAdd(obj) {
     this.allObjects.set(obj.id, obj);
-    
+
     // Se não é nosso e estamos em overlap, adiciona como fantasma
     if (obj.ownerId !== this.windowManager.label) {
       const overlapping = this.windowManager.getOverlappingWindows();
@@ -78,12 +95,12 @@ export class ObjectManager {
             obj.position,
             obj.properties,
             obj.id,
-            true // isGhost
+            true
           );
         }
       }
     }
-    
+
     this.updateUI();
   }
 
@@ -98,7 +115,26 @@ export class ObjectManager {
   handleObjectRemove(id) {
     this.allObjects.delete(id);
     this.universe.removeObject(id);
+    
+    // Fecha menu se estava editando este objeto
+    if (this.editingObject === id) {
+      this.hideEditMenu();
+    }
+    
     this.updateUI();
+  }
+
+  handleObjectUpdate(id, properties) {
+    const objData = this.allObjects.get(id);
+    if (objData) {
+      objData.properties = { ...objData.properties, ...properties };
+      this.universe.updateObjectProperties(id, properties);
+      
+      // Atualiza menu se está aberto
+      if (this.editingObject === id) {
+        this.updateEditMenu(objData);
+      }
+    }
   }
 
   handleOverlaps(overlappingLabels) {
@@ -111,10 +147,10 @@ export class ObjectManager {
         }
       }
     });
-    
+
     // Adiciona fantasmas de janelas sobrepostas
     this.allObjects.forEach((objData, id) => {
-      if (objData.ownerId !== this.windowManager.label && 
+      if (objData.ownerId !== this.windowManager.label &&
           overlappingLabels.includes(objData.ownerId)) {
         if (!this.universe.objects.has(id)) {
           this.universe.addObject(
@@ -122,34 +158,35 @@ export class ObjectManager {
             objData.position,
             objData.properties,
             id,
-            true // isGhost
+            true
           );
         }
       }
     });
-    
+
     this.updateUI();
   }
 
   async addObject(type) {
     const id = this.generateId();
-    
+
     // Posição aleatória
     const position = {
       x: (Math.random() - 0.5) * 8,
       y: 1 + Math.random() * 2,
       z: (Math.random() - 0.5) * 8
     };
-    
+
     // Cor aleatória
-    const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xff00ff, 0x00ffff, 0xffff00];
+    const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xff00ff, 0x00ffff, 0xffff00, 0xff6600, 0xff0088];
     const color = colors[Math.floor(Math.random() * colors.length)];
-    
+
     const properties = {
       color: color,
-      scale: 0.5 + Math.random() * 1
+      scale: 0.5 + Math.random() * 1,
+      isSolid: true // Sólido por padrão
     };
-    
+
     const objData = {
       id,
       type,
@@ -158,32 +195,86 @@ export class ObjectManager {
       ownerId: this.windowManager.label,
       createdAt: Date.now()
     };
-    
-    // Adiciona localmente (sem fade para objetos locais)
+
+    // Adiciona localmente
     this.universe.addObject(type, position, properties, id, false);
     this.myObjects.add(id);
     this.allObjects.set(id, objData);
-    
-    // Broadcast
+
+    // Broadcast LOCAL (Tauri events)
     await emit('object-add', objData);
-    
+
+    // Broadcast REDE (WebSocket) se conectado
+    if (this.networkManager && this.networkManager.connected) {
+      this.networkManager.broadcastObjectAdd(objData);
+    }
+
     this.updateUI();
-    this.showTooltip(`${this.getEmoji(type)} adicionado!`);
-    
+    this.showTooltip(`${this.getEmoji(type)} ${type} adicionado!`);
+
     console.log(`✨ Objeto ${type} criado:`, id);
     return id;
   }
 
+  // Novo método para lidar com objetos remotos
+  handleRemoteObjectAdd(sourceCode, obj) {
+    console.log(`🌐 Objeto remoto de ${sourceCode}:`, obj.type);
+
+    // Marca como remoto
+    const remoteId = `remote_${sourceCode}_${obj.id}`;
+    
+    // Adiciona como fantasma
+    this.universe.addObject(
+      obj.type,
+      obj.position,
+      obj.properties,
+      remoteId,
+      true // isGhost
+    );
+
+    this.remoteObjects.set(remoteId, {
+      ...obj,
+      sourceCode,
+      originalId: obj.id
+    });
+
+    this.updateUI();
+  }
+
   async removeObject(id) {
     if (!this.myObjects.has(id)) return;
-    
+
     this.universe.removeObject(id);
     this.myObjects.delete(id);
     this.allObjects.delete(id);
-    
+
+    // Broadcast LOCAL
     await emit('object-remove', { id });
-    
+
+    // Broadcast REDE
+    if (this.networkManager && this.networkManager.connected) {
+      this.networkManager.broadcastObjectRemove(id);
+    }
+
     this.updateUI();
+  }
+
+  async updateObjectProperties(id, properties) {
+    if (!this.myObjects.has(id)) return;
+
+    const objData = this.allObjects.get(id);
+    if (objData) {
+      objData.properties = { ...objData.properties, ...properties };
+      this.universe.updateObjectProperties(id, properties);
+      
+      // Broadcast LOCAL
+      await emit('object-update', { id, properties });
+
+      // Broadcast REDE
+      if (this.networkManager && this.networkManager.connected) {
+        this.networkManager.broadcastObjectUpdate(id, properties);
+      }
+    }
   }
 
   selectObject(id) {
@@ -191,23 +282,151 @@ export class ObjectManager {
     document.querySelectorAll('.object-item').forEach(el => {
       el.classList.remove('selected');
     });
-    
+
     // Adiciona nova seleção
     const element = document.querySelector(`[data-id="${id}"]`);
     if (element) {
       element.classList.add('selected');
       this.selectedObject = id;
-      
+
       // Destaca objeto na cena
       const mesh = this.universe.objects.get(id);
       if (mesh) {
         this.universe.highlightObject(mesh);
-        
+
+        // Mostra menu se for nosso objeto
+        if (this.myObjects.has(id)) {
+          this.showEditMenu(mesh);
+        }
+
         // Remove destaque após 1s
         setTimeout(() => {
           this.universe.unhighlightObject(mesh);
         }, 1000);
       }
+    }
+  }
+
+  showEditMenu(mesh) {
+    if (!this.myObjects.has(mesh.userData.id)) {
+      console.log('❌ Não é possível editar objetos de outros universos');
+      return;
+    }
+
+    this.editingObject = mesh.userData.id;
+    const objData = this.allObjects.get(mesh.userData.id);
+    
+    // Remove menu anterior se existir
+    this.hideEditMenu();
+
+    // Cria menu
+    const menu = document.createElement('div');
+    menu.id = 'edit-menu';
+    menu.innerHTML = `
+      <div class="edit-panel">
+        <div class="edit-header">
+          <h3>✏️ Editar ${this.getEmoji(mesh.userData.type)} ${mesh.userData.type}</h3>
+          <button class="close-btn" onclick="window.closeEditMenu()">✕</button>
+        </div>
+        
+        <div class="edit-content">
+          <div class="edit-row">
+            <label>🎨 Cor:</label>
+            <input type="color" id="edit-color" value="#${objData.properties.color.toString(16).padStart(6, '0')}">
+          </div>
+          
+          <div class="edit-row">
+            <label>📏 Tamanho: <span id="scale-value">${objData.properties.scale.toFixed(2)}</span></label>
+            <input type="range" id="edit-scale" min="0.1" max="3" step="0.1" value="${objData.properties.scale}">
+          </div>
+          
+          <div class="edit-row">
+            <label>
+              <input type="checkbox" id="edit-solid" ${objData.properties.isSolid ? 'checked' : ''}>
+              🧱 Sólido (colisão no FPS)
+            </label>
+          </div>
+          
+          <div class="edit-actions">
+            <button class="btn-apply" onclick="window.applyEdit()">✓ Aplicar</button>
+            <button class="btn-delete" onclick="window.deleteObject()">🗑️ Deletar</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(menu);
+
+    // Listeners
+    document.getElementById('edit-scale').addEventListener('input', (e) => {
+      document.getElementById('scale-value').textContent = parseFloat(e.target.value).toFixed(2);
+    });
+
+    // Funções globais temporárias
+    window.closeEditMenu = () => this.hideEditMenu();
+    window.applyEdit = () => this.applyEdit();
+    window.deleteObject = () => this.deleteCurrentObject();
+
+    console.log('📝 Menu de edição aberto');
+  }
+
+  updateEditMenu(objData) {
+    const colorInput = document.getElementById('edit-color');
+    const scaleInput = document.getElementById('edit-scale');
+    const solidInput = document.getElementById('edit-solid');
+    
+    if (colorInput) {
+      colorInput.value = `#${objData.properties.color.toString(16).padStart(6, '0')}`;
+    }
+    if (scaleInput) {
+      scaleInput.value = objData.properties.scale;
+      document.getElementById('scale-value').textContent = objData.properties.scale.toFixed(2);
+    }
+    if (solidInput) {
+      solidInput.checked = objData.properties.isSolid;
+    }
+  }
+
+  async applyEdit() {
+    if (!this.editingObject) return;
+
+    const colorInput = document.getElementById('edit-color');
+    const scaleInput = document.getElementById('edit-scale');
+    const solidInput = document.getElementById('edit-solid');
+
+    const properties = {
+      color: parseInt(colorInput.value.substring(1), 16),
+      scale: parseFloat(scaleInput.value),
+      isSolid: solidInput.checked
+    };
+
+    await this.updateObjectProperties(this.editingObject, properties);
+
+    this.showTooltip('✓ Alterações aplicadas!');
+    console.log('✓ Propriedades atualizadas:', properties);
+  }
+
+  async deleteCurrentObject() {
+    if (!this.editingObject) return;
+
+    const confirmed = confirm('Deletar este objeto?');
+    if (confirmed) {
+      await this.removeObject(this.editingObject);
+      this.hideEditMenu();
+      this.showTooltip('🗑️ Objeto deletado!');
+    }
+  }
+
+  hideEditMenu() {
+    const menu = document.getElementById('edit-menu');
+    if (menu) {
+      menu.remove();
+      this.editingObject = null;
+      
+      // Remove funções globais
+      delete window.closeEditMenu;
+      delete window.applyEdit;
+      delete window.deleteObject;
     }
   }
 
@@ -217,30 +436,32 @@ export class ObjectManager {
     const ghostCount = Array.from(this.universe.objects.values())
       .filter(obj => obj.userData.isGhost).length;
     const totalCount = localCount + ghostCount;
-    
+
     document.getElementById('object-count').textContent = totalCount;
-    
+
     // Lista de objetos
     const container = document.getElementById('objects-container');
     if (totalCount === 0) {
       container.innerHTML = 'Nenhum';
     } else {
       let html = '';
-      
+
       this.universe.objects.forEach((mesh) => {
         const emoji = this.getEmoji(mesh.userData.type);
         const ghost = mesh.userData.isGhost;
         const selected = this.selectedObject === mesh.userData.id;
-        html += `<div class="object-item ${ghost ? 'ghost' : ''} ${selected ? 'selected' : ''}" 
+        const solid = mesh.userData.isSolid ? '🧱' : '👻';
+        
+        html += `<div class="object-item ${ghost ? 'ghost' : ''} ${selected ? 'selected' : ''}"
                       data-id="${mesh.userData.id}">
-          ${emoji} ${mesh.userData.type} ${ghost ? '👻' : ''}
+          ${emoji} ${mesh.userData.type} ${ghost ? '(fantasma)' : solid}
         </div>`;
       });
-      
+
       container.innerHTML = html;
     }
-    
-    // Atualiza memória (aproximado)
+
+    // Atualiza memória
     this.updateMemoryUsage();
   }
 
@@ -255,7 +476,10 @@ export class ObjectManager {
     const emojis = {
       sphere: '🔵',
       cube: '🧊',
-      node: '⭐'
+      node: '⭐',
+      pyramid: '🔺',
+      torus: '🍩',
+      cylinder: '🥫'
     };
     return emojis[type] || '📦';
   }
@@ -268,7 +492,7 @@ export class ObjectManager {
     tooltip.style.top = '50%';
     tooltip.style.transform = 'translate(-50%, -50%)';
     document.body.appendChild(tooltip);
-    
+
     setTimeout(() => tooltip.remove(), 1500);
   }
 
@@ -277,6 +501,6 @@ export class ObjectManager {
   }
 
   cleanup() {
-    // Cleanup é automático com Tauri
+    this.hideEditMenu();
   }
 }

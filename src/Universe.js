@@ -12,12 +12,20 @@ export class Universe {
     // Player
     this.hasPlayer = hasPlayer;
     this.player = null;
-    
+    this.playerVelocity = new THREE.Vector3();
+
     // Modos de visão
-    this.viewMode = '3d'; // '3d' ou 'fps'
+    this.viewMode = '3d';
     this.cameraDistance = 12;
 
-    // Raycaster para drag & drop
+    // FPS settings otimizados para hardware fraco
+    this.fpsSettings = {
+      pixelRatio: 0.5, // Reduz resolução drasticamente
+      renderDistance: 30, // Fog mais próximo
+      maxFPS: 30 // Limita FPS para economizar
+    };
+
+    // Raycaster para seleção
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
     this.selectedObject = null;
@@ -31,10 +39,21 @@ export class Universe {
     this.lastMouseX = 0;
     this.lastMouseY = 0;
 
-    // Controles FPS (simplificados)
-    this.keys = { w: false, a: false, s: false, d: false, shift: false };
+    // Controles FPS SIMPLIFICADOS (sem pointer lock que trava)
+    this.keys = { w: false, a: false, s: false, d: false, shift: false, space: false };
     this.fpsYaw = 0;
     this.fpsPitch = 0;
+    this.gravity = -0.02;
+    this.jumpPower = 0.3;
+    this.isGrounded = false;
+    
+    // Mouse tracking para FPS leve
+    this.lastFPSMouseX = window.innerWidth / 2;
+    this.lastFPSMouseY = window.innerHeight / 2;
+
+    // Throttle para animação
+    this.lastFrameTime = 0;
+    this.frameInterval = 1000 / 30; // 30 FPS max
 
     this.init();
   }
@@ -51,34 +70,44 @@ export class Universe {
     this.camera.position.set(0, 5, 12);
     this.camera.lookAt(0, 0, 0);
 
-    // Renderer otimizado
+    // Renderer SUPER OTIMIZADO para hardware fraco
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
-      antialias: false,
+      antialias: false, // Desliga anti-aliasing
       alpha: false,
-      powerPreference: "low-power"
+      powerPreference: "low-power",
+      precision: "lowp" // Precisão baixa
     });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    this.renderer.setPixelRatio(1); // Força 1:1 no modo 3D
+    this.renderer.shadowMap.enabled = false; // Sem sombras
 
-    // Iluminação
+    // Iluminação simplificada
     const ambientLight = new THREE.AmbientLight(0x404040, 1.5);
     this.scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
     directionalLight.position.set(5, 10, 5);
     this.scene.add(directionalLight);
 
-    // Grid
+    // Grid simples
     const gridHelper = new THREE.GridHelper(20, 10, 0x00ff00, 0x003300);
     this.scene.add(gridHelper);
 
-    // Player (apenas se tiver)
+    // Chão invisível para colisão
+    const floorGeom = new THREE.PlaneGeometry(20, 20);
+    const floorMat = new THREE.MeshBasicMaterial({ visible: false });
+    this.floor = new THREE.Mesh(floorGeom, floorMat);
+    this.floor.rotation.x = -Math.PI / 2;
+    this.floor.userData.isFloor = true;
+    this.scene.add(this.floor);
+
+    // Player
     if (this.hasPlayer) {
       this.createPlayer();
     }
 
-    // Estrelas
+    // Estrelas reduzidas
     this.createStarField();
 
     // Controles
@@ -88,14 +117,15 @@ export class Universe {
     // Inicia animação
     this.animate();
 
-    console.log('🌌 Universe iniciado');
+    console.log('🌌 Universe iniciado (modo LOW PERFORMANCE)');
   }
 
   createStarField() {
     const geometry = new THREE.BufferGeometry();
     const vertices = [];
 
-    for (let i = 0; i < 300; i++) {
+    // Reduzido de 300 para 100 estrelas
+    for (let i = 0; i < 100; i++) {
       const x = (Math.random() - 0.5) * 100;
       const y = (Math.random() - 0.5) * 100;
       const z = (Math.random() - 0.5) * 100;
@@ -117,28 +147,27 @@ export class Universe {
 
   createPlayer() {
     const group = new THREE.Group();
-    
-    const bodyGeom = new THREE.CylinderGeometry(0.3, 0.3, 1.4, 8);
-    const bodyMat = new THREE.MeshStandardMaterial({
-      color: 0x00ffff,
-      emissive: 0x00ffff,
-      emissiveIntensity: 0.3
+
+    // Geometrias simplificadas (menos segmentos)
+    const bodyGeom = new THREE.CylinderGeometry(0.3, 0.3, 1.4, 6);
+    const bodyMat = new THREE.MeshBasicMaterial({ // MeshBasic é mais leve
+      color: 0x00ffff
     });
     const body = new THREE.Mesh(bodyGeom, bodyMat);
     body.position.y = 0.7;
-    
-    const headGeom = new THREE.SphereGeometry(0.25, 8, 8);
+
+    const headGeom = new THREE.SphereGeometry(0.25, 6, 6);
     const head = new THREE.Mesh(headGeom, bodyMat);
     head.position.y = 1.6;
-    
+
     group.add(body);
     group.add(head);
     group.position.set(0, 0.1, 0);
-    
+
     this.player = group;
     this.scene.add(group);
-    
-    console.log('🧍 Player criado');
+
+    console.log('🧍 Player criado (low poly)');
   }
 
   toggleViewMode() {
@@ -146,36 +175,59 @@ export class Universe {
       console.log('❌ Sem player nesta janela');
       return;
     }
-    
+
     this.viewMode = this.viewMode === '3d' ? 'fps' : '3d';
-    
+
     if (this.viewMode === 'fps') {
-      // Ativa FPS - câmera olha pra frente
-      this.fpsYaw = Math.PI; // Olha pra frente do grid
+      // MODO FPS - SEM POINTER LOCK (causa travamento)
+      this.fpsYaw = Math.PI;
       this.fpsPitch = 0;
-      
-      // Posiciona câmera
+
       const eyeHeight = 1.6;
       this.camera.position.set(
         this.player.position.x,
         this.player.position.y + eyeHeight,
         this.player.position.z
       );
-      
+
       this.camera.rotation.order = 'YXZ';
       this.camera.rotation.set(0, this.fpsYaw, 0);
+
+      // OTIMIZAÇÕES PESADAS
+      this.renderer.setPixelRatio(this.fpsSettings.pixelRatio); // Reduz resolução
+      this.scene.fog.density = 0.05; // Fog mais próximo
       
-      // Esconde cursor e trava ele no centro
+      // Esconde estrelas para economizar
+      this.scene.children.forEach(child => {
+        if (child instanceof THREE.Points) {
+          child.visible = false;
+        }
+      });
+
       this.canvas.style.cursor = 'none';
       
-      console.log('👁️ Modo FPS ativado - mova o mouse livremente');
+      // Reseta posição do mouse
+      this.lastFPSMouseX = window.innerWidth / 2;
+      this.lastFPSMouseY = window.innerHeight / 2;
+
+      console.log('👁️ Modo FPS ativado (LOW PERFORMANCE)');
     } else {
       // Volta pra 3D
       this.canvas.style.cursor = 'default';
+      this.renderer.setPixelRatio(1);
+      this.scene.fog.density = 0.02;
+      
+      // Mostra estrelas novamente
+      this.scene.children.forEach(child => {
+        if (child instanceof THREE.Points) {
+          child.visible = true;
+        }
+      });
+      
       this.resetCamera3D();
       console.log('🌍 Modo 3D ativado');
     }
-    
+
     // Mostra/esconde player
     if (this.player) {
       this.player.visible = this.viewMode === '3d';
@@ -198,26 +250,11 @@ export class Universe {
       if (key === 's') this.keys.s = true;
       if (key === 'd') this.keys.d = true;
       if (key === 'shift') this.keys.shift = true;
-      
+      if (key === ' ') this.keys.space = true;
+
       if (key === 'v' && this.hasPlayer) {
         this.toggleViewMode();
-        // Atualiza UI quando usa tecla V
-        const mode = this.viewMode;
-        const viewText = document.getElementById('view-text');
-        const viewBtn = document.getElementById('view-btn');
-        const hud = document.getElementById('hud');
-        const crosshair = document.getElementById('crosshair');
-        
-        if (viewText) viewText.textContent = mode === 'fps' ? 'FPS' : '3D';
-        if (viewBtn) viewBtn.textContent = mode === 'fps' ? '🌍 3D' : '👁️ FPS';
-        
-        if (mode === 'fps') {
-          hud.classList.add('fps-mode');
-          if (crosshair) crosshair.classList.add('active');
-        } else {
-          hud.classList.remove('fps-mode');
-          if (crosshair) crosshair.classList.remove('active');
-        }
+        this.updateViewUI();
       }
     });
 
@@ -228,20 +265,35 @@ export class Universe {
       if (key === 's') this.keys.s = false;
       if (key === 'd') this.keys.d = false;
       if (key === 'shift') this.keys.shift = false;
+      if (key === ' ') this.keys.space = false;
     });
 
-    // Mouse move
+    // Mouse move - COM RECENTRALIZAÇÃO
     document.addEventListener('mousemove', (e) => {
-      // Modo FPS - rotação LIVRE (sem botão)
+      // Modo FPS - movimento com auto-recentralização
       if (this.viewMode === 'fps') {
-        // Sensibilidade aumentada
-        this.fpsYaw -= e.movementX * 0.005;
-        this.fpsPitch -= e.movementY * 0.005;
-        // Limita pitch (não vira de cabeça pra baixo)
-        this.fpsPitch = Math.max(-1.4, Math.min(1.4, this.fpsPitch));
+        const centerX = window.innerWidth / 2;
+        const centerY = window.innerHeight / 2;
+        
+        const deltaX = e.clientX - centerX;
+        const deltaY = e.clientY - centerY;
+        
+        // Aplica rotação baseado na distância do centro
+        this.fpsYaw -= deltaX * 0.003;
+        this.fpsPitch -= deltaY * 0.003;
+        this.fpsPitch = Math.max(-1.5, Math.min(1.5, this.fpsPitch));
+        
+        // RECENTRALIZA quando sai muito do centro (evita sair da tela)
+        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        if (distance > 100) {
+          // Força recentralização movendo cursor (se navegador permitir)
+          this.lastFPSMouseX = centerX;
+          this.lastFPSMouseY = centerY;
+        }
+        
         return;
       }
-      
+
       // Modo 3D - drag objetos
       if (this.isDragging && this.selectedObject) {
         this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -266,7 +318,6 @@ export class Universe {
           }));
         }
       } else if (this.isRotating) {
-        // Rotação 3D
         const deltaX = e.clientX - this.lastMouseX;
         const deltaY = e.clientY - this.lastMouseY;
 
@@ -285,11 +336,11 @@ export class Universe {
       }
     });
 
-    // Mouse down (apenas modo 3D)
+    // Mouse down
     this.canvas.addEventListener('mousedown', (e) => {
       if (this.viewMode === 'fps') return;
-      if (e.button !== 0) return; // Apenas botão esquerdo
-      
+      if (e.button !== 0) return;
+
       this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
       this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
 
@@ -318,6 +369,11 @@ export class Universe {
           document.body.classList.add('dragging');
 
           this.highlightObject(obj);
+
+          // Mostra menu de edição
+          window.dispatchEvent(new CustomEvent('object-selected', {
+            detail: { object: obj }
+          }));
         }
       } else {
         this.isRotating = true;
@@ -340,17 +396,10 @@ export class Universe {
       document.body.classList.remove('dragging');
     });
 
-    // Desabilita menu contexto
-    this.canvas.addEventListener('contextmenu', (e) => {
-      if (this.viewMode === 'fps') {
-        e.preventDefault();
-      }
-    });
-
-    // Zoom (apenas modo 3D)
+    // Zoom
     this.canvas.addEventListener('wheel', (e) => {
       if (this.viewMode === 'fps') return;
-      
+
       e.preventDefault();
       const delta = e.deltaY * 0.001;
 
@@ -365,9 +414,28 @@ export class Universe {
       } else if (distance > 30) {
         this.camera.position.normalize().multiplyScalar(30);
       }
-      
+
       this.cameraDistance = distance;
     });
+  }
+
+  updateViewUI() {
+    const mode = this.viewMode;
+    const viewText = document.getElementById('view-text');
+    const viewBtn = document.getElementById('view-btn');
+    const hud = document.getElementById('hud');
+    const crosshair = document.getElementById('crosshair');
+
+    if (viewText) viewText.textContent = mode === 'fps' ? 'FPS' : '3D';
+    if (viewBtn) viewBtn.textContent = mode === 'fps' ? '🌍 3D' : '👁️ FPS';
+
+    if (mode === 'fps') {
+      hud.classList.add('fps-mode');
+      if (crosshair) crosshair.classList.add('active');
+    } else {
+      hud.classList.remove('fps-mode');
+      if (crosshair) crosshair.classList.remove('active');
+    }
   }
 
   highlightObject(obj) {
@@ -386,6 +454,25 @@ export class Universe {
     });
   }
 
+  checkCollision(position) {
+    const playerRadius = 0.3;
+
+    for (const [id, mesh] of this.objects.entries()) {
+      const objData = mesh.userData;
+      
+      if (!objData.isSolid) continue;
+      
+      const distance = position.distanceTo(mesh.position);
+      const minDistance = playerRadius + (objData.properties?.scale || 1) * 0.5;
+      
+      if (distance < minDistance) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
   addObject(type, position, properties, id, isGhost = false) {
     let mesh;
 
@@ -399,11 +486,26 @@ export class Universe {
       case 'node':
         mesh = this.createNode(position, properties);
         break;
+      case 'pyramid':
+        mesh = this.createPyramid(position, properties);
+        break;
+      case 'torus':
+        mesh = this.createTorus(position, properties);
+        break;
+      case 'cylinder':
+        mesh = this.createCylinder(position, properties);
+        break;
       default:
         mesh = this.createSphere(position, properties);
     }
 
-    mesh.userData = { id, type, properties, isGhost };
+    mesh.userData = { 
+      id, 
+      type, 
+      properties, 
+      isGhost,
+      isSolid: properties?.isSolid !== false
+    };
 
     if (isGhost) {
       mesh.traverse((child) => {
@@ -474,31 +576,22 @@ export class Universe {
   }
 
   createSphere(position, properties) {
-    const geometry = new THREE.SphereGeometry(properties.scale || 1, 16, 16);
-    const material = new THREE.MeshStandardMaterial({
-      color: properties.color || 0xff00ff,
-      emissive: properties.color || 0xff00ff,
-      emissiveIntensity: 0.3,
-      metalness: 0.4,
-      roughness: 0.3
+    // Reduzido de 16 para 8 segmentos
+    const geometry = new THREE.SphereGeometry(properties.scale || 1, 8, 8);
+    const material = new THREE.MeshBasicMaterial({ // MeshBasic é mais leve
+      color: properties.color || 0xff00ff
     });
 
     const sphere = new THREE.Mesh(geometry, material);
     sphere.position.copy(position);
-    sphere.castShadow = false;
-    sphere.receiveShadow = false;
     return sphere;
   }
 
   createCube(position, properties) {
     const size = properties.scale || 1;
     const geometry = new THREE.BoxGeometry(size, size, size);
-    const material = new THREE.MeshStandardMaterial({
-      color: properties.color || 0x00ff00,
-      emissive: properties.color || 0x00ff00,
-      emissiveIntensity: 0.3,
-      metalness: 0.4,
-      roughness: 0.3
+    const material = new THREE.MeshBasicMaterial({
+      color: properties.color || 0x00ff00
     });
 
     const cube = new THREE.Mesh(geometry, material);
@@ -508,7 +601,7 @@ export class Universe {
   }
 
   createNode(position, properties) {
-    const geometry = new THREE.SphereGeometry(0.3 * (properties.scale || 1), 12, 12);
+    const geometry = new THREE.SphereGeometry(0.3 * (properties.scale || 1), 8, 8);
     const material = new THREE.MeshBasicMaterial({
       color: properties.color || 0xffff00
     });
@@ -516,7 +609,7 @@ export class Universe {
     const node = new THREE.Mesh(geometry, material);
     node.position.copy(position);
 
-    const glowGeometry = new THREE.SphereGeometry(0.5 * (properties.scale || 1), 12, 12);
+    const glowGeometry = new THREE.SphereGeometry(0.5 * (properties.scale || 1), 8, 8);
     const glowMaterial = new THREE.MeshBasicMaterial({
       color: properties.color || 0xffff00,
       transparent: true,
@@ -526,6 +619,46 @@ export class Universe {
     node.add(glow);
 
     return node;
+  }
+
+  createPyramid(position, properties) {
+    const geometry = new THREE.ConeGeometry(properties.scale || 1, properties.scale * 1.5 || 1.5, 4);
+    const material = new THREE.MeshBasicMaterial({
+      color: properties.color || 0xff6600
+    });
+
+    const pyramid = new THREE.Mesh(geometry, material);
+    pyramid.position.copy(position);
+    pyramid.userData.rotationSpeed = 0.01;
+    return pyramid;
+  }
+
+  createTorus(position, properties) {
+    const geometry = new THREE.TorusGeometry(properties.scale || 1, 0.3, 8, 16); // Reduzido segmentos
+    const material = new THREE.MeshBasicMaterial({
+      color: properties.color || 0xff0088
+    });
+
+    const torus = new THREE.Mesh(geometry, material);
+    torus.position.copy(position);
+    torus.userData.rotationSpeed = 0.015;
+    return torus;
+  }
+
+  createCylinder(position, properties) {
+    const geometry = new THREE.CylinderGeometry(
+      properties.scale * 0.5 || 0.5,
+      properties.scale * 0.5 || 0.5,
+      properties.scale * 2 || 2,
+      8 // Reduzido de 16 para 8 segmentos
+    );
+    const material = new THREE.MeshBasicMaterial({
+      color: properties.color || 0x0088ff
+    });
+
+    const cylinder = new THREE.Mesh(geometry, material);
+    cylinder.position.copy(position);
+    return cylinder;
   }
 
   removeObject(id) {
@@ -572,19 +705,50 @@ export class Universe {
     }
   }
 
+  updateObjectProperties(id, properties) {
+    const obj = this.objects.get(id);
+    if (!obj) return;
+
+    obj.userData.properties = { ...obj.userData.properties, ...properties };
+    obj.userData.isSolid = properties.isSolid !== false;
+
+    if (properties.color !== undefined) {
+      obj.traverse((child) => {
+        if (child.material) {
+          child.material.color.setHex(properties.color);
+        }
+      });
+    }
+
+    if (properties.scale !== undefined) {
+      obj.scale.setScalar(properties.scale);
+    }
+  }
+
   animate() {
     this.animationId = requestAnimationFrame(() => this.animate());
+
+    // THROTTLE DE FPS para hardware fraco
+    const now = Date.now();
+    const elapsed = now - this.lastFrameTime;
+
+    if (elapsed < this.frameInterval) {
+      return; // Pula frames para manter 30 FPS
+    }
+
+    this.lastFrameTime = now;
 
     // Movimento FPS
     if (this.viewMode === 'fps' && this.player) {
       this.updateFPSMovement();
     }
 
-    // Anima objetos
+    // Anima objetos (mais lento no FPS)
+    const rotationSpeed = this.viewMode === 'fps' ? 0.005 : 0.01;
     this.objects.forEach((obj) => {
       if (obj.userData.rotationSpeed && obj !== this.selectedObject) {
-        obj.rotation.x += obj.userData.rotationSpeed;
-        obj.rotation.y += obj.userData.rotationSpeed;
+        obj.rotation.x += rotationSpeed;
+        obj.rotation.y += rotationSpeed;
       }
     });
 
@@ -594,8 +758,7 @@ export class Universe {
   updateFPSMovement() {
     const speed = this.keys.shift ? 0.15 : 0.08;
     const direction = new THREE.Vector3();
-    
-    // Movimento baseado na rotação YAW (horizontal)
+
     if (this.keys.w) {
       direction.x -= Math.sin(this.fpsYaw) * speed;
       direction.z -= Math.cos(this.fpsYaw) * speed;
@@ -612,23 +775,47 @@ export class Universe {
       direction.x += Math.cos(this.fpsYaw) * speed;
       direction.z -= Math.sin(this.fpsYaw) * speed;
     }
-    
-    // Aplica movimento ao player
-    this.player.position.add(direction);
-    
-    // Limita área (dentro do grid)
+
+    // Pulo
+    if (this.keys.space && this.isGrounded) {
+      this.playerVelocity.y = this.jumpPower;
+      this.isGrounded = false;
+    }
+
+    // Gravidade
+    this.playerVelocity.y += this.gravity;
+
+    // Nova posição
+    const newPos = this.player.position.clone();
+    newPos.add(direction);
+    newPos.y += this.playerVelocity.y;
+
+    // Chão
+    if (newPos.y <= 0.1) {
+      newPos.y = 0.1;
+      this.playerVelocity.y = 0;
+      this.isGrounded = true;
+    }
+
+    // Colisão
+    if (!this.checkCollision(newPos)) {
+      this.player.position.copy(newPos);
+    } else {
+      this.playerVelocity.y = 0;
+    }
+
+    // Limites
     this.player.position.x = Math.max(-9, Math.min(9, this.player.position.x));
     this.player.position.z = Math.max(-9, Math.min(9, this.player.position.z));
-    
-    // Câmera sempre na altura dos olhos
+
+    // Câmera
     const eyeHeight = 1.6;
     this.camera.position.set(
       this.player.position.x,
       this.player.position.y + eyeHeight,
       this.player.position.z
     );
-    
-    // Aplica rotação (YXZ é importante!)
+
     this.camera.rotation.order = 'YXZ';
     this.camera.rotation.y = this.fpsYaw;
     this.camera.rotation.x = this.fpsPitch;

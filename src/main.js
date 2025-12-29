@@ -1,11 +1,13 @@
 import { WindowManager } from './WindowManager.js';
 import { Universe } from './Universe.js';
 import { ObjectManager } from './ObjectManager.js';
+import { NetworkManager } from './NetworkManager.js';
 import { WebviewWindow } from '@tauri-apps/api/window';
 
 let windowManager;
 let universe;
 let objectManager;
+let networkManager;
 
 async function init() {
   console.log('🚀 Iniciando Multi Universe...');
@@ -19,7 +21,11 @@ async function init() {
   // Inicializa componentes
   windowManager = new WindowManager();
   universe = new Universe(canvas, isFirstWindow);
-  objectManager = new ObjectManager(windowManager, universe);
+  networkManager = new NetworkManager(windowManager, null); // objectManager depois
+  objectManager = new ObjectManager(windowManager, universe, networkManager);
+  
+  // Atualiza referência circular
+  networkManager.objectManager = objectManager;
 
   // Aguarda inicialização
   await new Promise(resolve => setTimeout(resolve, 100));
@@ -37,7 +43,7 @@ async function init() {
   // Setup controles
   setupControls();
 
-  // Remove info após 5s
+  // Remove info após 8s
   setTimeout(() => {
     const info = document.getElementById('info');
     if (info) {
@@ -45,14 +51,14 @@ async function init() {
       info.style.transition = 'opacity 1s';
       setTimeout(() => info.remove(), 1000);
     }
-  }, 5000);
+  }, 8000);
 
   // Atualiza memória a cada 2s
   setInterval(() => {
     objectManager.updateMemoryUsage();
   }, 2000);
 
-  console.log('✅ App iniciado (modo otimizado)');
+  console.log('✅ App iniciado');
 }
 
 function setupControls() {
@@ -80,38 +86,98 @@ function setupControls() {
   if (viewBtn) {
     viewBtn.addEventListener('click', () => {
       universe.toggleViewMode();
-      
-      // Atualiza UI
-      const mode = universe.viewMode;
-      document.getElementById('view-text').textContent = mode === 'fps' ? 'FPS' : '3D';
-      viewBtn.textContent = mode === 'fps' ? '🌍 3D' : '👁️ FPS';
-      
-      // Muda cor do HUD e mostra crosshair
-      const hud = document.getElementById('hud');
-      const crosshair = document.getElementById('crosshair');
-      if (mode === 'fps') {
-        hud.classList.add('fps-mode');
-        crosshair.classList.add('active');
-      } else {
-        hud.classList.remove('fps-mode');
-        crosshair.classList.remove('active');
-      }
+      universe.updateViewUI();
     });
   }
 
-  // Adicionar esfera
+  // Botão de rede
+  document.getElementById('network-btn').addEventListener('click', () => {
+    const panel = document.getElementById('network-panel');
+    if (panel.style.display === 'none') {
+      panel.style.display = 'block';
+      
+      // Atualiza código
+      document.getElementById('my-code-display').textContent = networkManager.myCode;
+      
+      // Atualiza botão
+      const toggleBtn = document.getElementById('network-toggle');
+      if (networkManager.connected) {
+        toggleBtn.textContent = '🔌 Desconectar';
+        toggleBtn.classList.add('connected');
+      } else {
+        toggleBtn.textContent = '🔌 Conectar Servidor';
+        toggleBtn.classList.remove('connected');
+      }
+    } else {
+      panel.style.display = 'none';
+    }
+  });
+
+  // Funções globais para o painel de rede
+  window.closeNetworkPanel = () => {
+    document.getElementById('network-panel').style.display = 'none';
+  };
+
+  window.toggleNetwork = async () => {
+    const toggleBtn = document.getElementById('network-toggle');
+    
+    if (networkManager.connected) {
+      networkManager.disconnect();
+      toggleBtn.textContent = '🔌 Conectar Servidor';
+      toggleBtn.classList.remove('connected');
+    } else {
+      await networkManager.connect();
+      toggleBtn.textContent = '🔌 Desconectar';
+      toggleBtn.classList.add('connected');
+      
+      // Atualiza código
+      document.getElementById('my-code-display').textContent = networkManager.myCode;
+    }
+  };
+
+  window.connectRemote = () => {
+    const input = document.getElementById('remote-code-input');
+    const code = input.value.toUpperCase().trim();
+    
+    if (code.length !== 6) {
+      alert('❌ Código deve ter 6 caracteres');
+      return;
+    }
+
+    networkManager.mergeWithUniverse(code);
+    input.value = '';
+  };
+
+  // Enter no input de código
+  document.getElementById('remote-code-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      window.connectRemote();
+    }
+  });
+
+  // Adicionar objetos
   document.getElementById('sphere-btn').addEventListener('click', () => {
     objectManager.addObject('sphere');
   });
 
-  // Adicionar cubo
   document.getElementById('cube-btn').addEventListener('click', () => {
     objectManager.addObject('cube');
   });
 
-  // Adicionar node
   document.getElementById('node-btn').addEventListener('click', () => {
     objectManager.addObject('node');
+  });
+
+  document.getElementById('pyramid-btn').addEventListener('click', () => {
+    objectManager.addObject('pyramid');
+  });
+
+  document.getElementById('torus-btn').addEventListener('click', () => {
+    objectManager.addObject('torus');
+  });
+
+  document.getElementById('cylinder-btn').addEventListener('click', () => {
+    objectManager.addObject('cylinder');
   });
 
   // Atalhos de teclado
@@ -132,7 +198,13 @@ function setupControls() {
       });
     }
 
-    // Ctrl/Cmd + 1-3: Adicionar objetos
+    // Ctrl/Cmd + R: Toggle rede
+    if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+      e.preventDefault();
+      document.getElementById('network-btn').click();
+    }
+
+    // Ctrl/Cmd + 1-6: Adicionar objetos
     if (e.ctrlKey || e.metaKey) {
       switch (e.key) {
         case '1':
@@ -147,6 +219,18 @@ function setupControls() {
           e.preventDefault();
           objectManager.addObject('node');
           break;
+        case '4':
+          e.preventDefault();
+          objectManager.addObject('pyramid');
+          break;
+        case '5':
+          e.preventDefault();
+          objectManager.addObject('torus');
+          break;
+        case '6':
+          e.preventDefault();
+          objectManager.addObject('cylinder');
+          break;
       }
     }
 
@@ -160,8 +244,10 @@ function setupControls() {
 
 // Cleanup ao fechar
 window.addEventListener('beforeunload', async () => {
+  if (networkManager) networkManager.cleanup();
   if (windowManager) await windowManager.cleanup();
   if (universe) universe.cleanup();
+  if (objectManager) objectManager.cleanup();
 });
 
 // Inicializa
