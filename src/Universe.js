@@ -87,9 +87,10 @@ export class Universe {
 
     // Helpers
     const gridHelper = new THREE.GridHelper(50, 50, 0x00ff00, 0x003300);
+    gridHelper.position.y = 0.02; // Fix Z-fighting (Green flickering)
     this.scene.add(gridHelper);
 
-    // Chão invisível
+    // Chão invisível (mas sólido para raycast)
     const floorGeom = new THREE.PlaneGeometry(100, 100);
     const floorMat = new THREE.MeshBasicMaterial({ visible: false });
     this.floor = new THREE.Mesh(floorGeom, floorMat);
@@ -119,56 +120,42 @@ export class Universe {
     console.log(`🎨 Switching to ${mode}`);
     this.qualityMode = mode;
     
-    // Atualiza UI global (no index.html)
     if (window.updateQualityUI) window.updateQualityUI(mode);
 
     if (mode === 'retro') {
-      // Configurações RETRO
-      this.renderer.setPixelRatio(0.4);
+      this.renderer.setPixelRatio(0.5); // 0.5 é mais estável que 0.4
       this.scene.background = new THREE.Color(0x000000);
       this.scene.fog = new THREE.FogExp2(0x000000, 0.04);
       this.lightsGroup.visible = false;
-      this.frameInterval = 1000 / 30; // 30 FPS Cap
-      
+      this.frameInterval = 1000 / 30;
     } else {
-      // Configurações ULTRA
-      this.renderer.setPixelRatio(window.devicePixelRatio > 1.5 ? 1.5 : 1); // Limitado a 1.5x
-      this.scene.background = new THREE.Color(0x050510); // Azul escuro profundo
-      this.scene.fog = new THREE.FogExp2(0x050510, 0.015); // Fog mais distante e suave
+      this.renderer.setPixelRatio(window.devicePixelRatio > 1.5 ? 1.5 : 1);
+      this.scene.background = new THREE.Color(0x050510);
+      this.scene.fog = new THREE.FogExp2(0x050510, 0.015);
       this.lightsGroup.visible = true;
-      this.frameInterval = 1000 / 60; // Tenta 60 FPS
+      this.frameInterval = 1000 / 60;
     }
 
-    // Atualiza materiais de TODOS os objetos
-    this.objects.forEach(mesh => {
-      this.updateObjectMaterial(mesh);
-    });
+    this.objects.forEach(mesh => this.updateObjectMaterial(mesh));
 
-    // Atualiza Player
     if (this.player) {
       this.player.traverse(child => {
         if (child.isMesh) this.updateObjectMaterial(child, true);
       });
-      // Luz do player
-      if (this.playerLight) {
-        this.playerLight.visible = (mode === 'ultra');
-      }
+      if (this.playerLight) this.playerLight.visible = (mode === 'ultra');
     }
   }
 
-  // Helper para criar material baseado no modo
+  // Helper para criar material
   getMaterial(color, isEmissive = false) {
     if (this.qualityMode === 'retro') {
-      // Retro: Basic (sem luz), wireframe falso se quiser, cores chapadas
       return new THREE.MeshBasicMaterial({ color: color });
     } else {
-      // Ultra: Standard (reage a luz), roughness, metalness, emissive
       const mat = new THREE.MeshStandardMaterial({
         color: color,
         roughness: 0.3,
         metalness: 0.2
       });
-      
       if (isEmissive) {
         mat.emissive = new THREE.Color(color);
         mat.emissiveIntensity = 0.8;
@@ -179,7 +166,6 @@ export class Universe {
 
   updateObjectMaterial(mesh, isPlayer = false) {
     if (!mesh.userData || !mesh.userData.properties) {
-        // Se for parte do player ou auxiliar sem userdata complexo
         if (isPlayer && mesh.material) {
             const color = mesh.material.color.getHex();
             mesh.material.dispose();
@@ -187,28 +173,22 @@ export class Universe {
         }
         return;
     }
-
     const props = mesh.userData.properties;
     const color = props.color || 0xffffff;
     const isNode = mesh.userData.type === 'node';
-
     mesh.material.dispose();
-    mesh.material = this.getMaterial(color, isNode); // Nodes brilham no ultra
+    mesh.material = this.getMaterial(color, isNode);
   }
 
-
   // --- CREATION ---
-
+  // ... (createPlayer, createStarField, addObject, removeObject, updateObjectPosition, updateObjectProperties mantidos iguais)
   createPlayer() {
     const group = new THREE.Group();
-
-    // Corpo
     const bodyGeom = new THREE.CylinderGeometry(0.3, 0.3, 1.4, 8);
     const bodyMat = this.getMaterial(0x00ffff);
     const body = new THREE.Mesh(bodyGeom, bodyMat);
     body.position.y = 0.7;
 
-    // Cabeça
     const headGeom = new THREE.SphereGeometry(0.25, 8, 8);
     const headMat = this.getMaterial(0x00ffff);
     const head = new THREE.Mesh(headGeom, headMat);
@@ -217,7 +197,6 @@ export class Universe {
     group.add(body);
     group.add(head);
 
-    // Luz do Player (Ultra only)
     this.playerLight = new THREE.PointLight(0x00ffff, 1, 5);
     this.playerLight.position.set(0, 2, 0);
     this.playerLight.visible = false;
@@ -234,7 +213,7 @@ export class Universe {
     for (let i = 0; i < 200; i++) {
       vertices.push(
         (Math.random() - 0.5) * 200,
-        (Math.random() - 0.5) * 100 + 20, // Apenas acima
+        (Math.random() - 0.5) * 100 + 20,
         (Math.random() - 0.5) * 200
       );
     }
@@ -246,40 +225,19 @@ export class Universe {
 
   addObject(type, position, properties, id, isGhost = false) {
     let mesh;
-    // Low poly geometries
     const segs = 12; 
-
     switch (type) {
-      case 'sphere':
-        mesh = new THREE.Mesh(new THREE.SphereGeometry(properties.scale || 1, segs, segs), this.getMaterial(properties.color));
-        break;
-      case 'cube':
-        mesh = new THREE.Mesh(new THREE.BoxGeometry(properties.scale, properties.scale, properties.scale), this.getMaterial(properties.color));
-        break;
-      case 'node':
-        mesh = new THREE.Mesh(new THREE.SphereGeometry(0.3 * properties.scale, 8, 8), this.getMaterial(properties.color, true));
-        break;
-      case 'pyramid':
-        mesh = new THREE.Mesh(new THREE.ConeGeometry(properties.scale, properties.scale * 1.5, 4), this.getMaterial(properties.color));
-        break;
-      case 'torus':
-        mesh = new THREE.Mesh(new THREE.TorusGeometry(properties.scale, 0.3, 6, 12), this.getMaterial(properties.color));
-        break;
-      case 'cylinder':
-        mesh = new THREE.Mesh(new THREE.CylinderGeometry(properties.scale * 0.5, properties.scale * 0.5, properties.scale * 2, 8), this.getMaterial(properties.color));
-        break;
-      default:
-        mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 8), this.getMaterial(0xffffff));
+      case 'sphere': mesh = new THREE.Mesh(new THREE.SphereGeometry(properties.scale || 1, segs, segs), this.getMaterial(properties.color)); break;
+      case 'cube': mesh = new THREE.Mesh(new THREE.BoxGeometry(properties.scale, properties.scale, properties.scale), this.getMaterial(properties.color)); break;
+      case 'node': mesh = new THREE.Mesh(new THREE.SphereGeometry(0.3 * properties.scale, 8, 8), this.getMaterial(properties.color, true)); break;
+      case 'pyramid': mesh = new THREE.Mesh(new THREE.ConeGeometry(properties.scale, properties.scale * 1.5, 4), this.getMaterial(properties.color)); break;
+      case 'torus': mesh = new THREE.Mesh(new THREE.TorusGeometry(properties.scale, 0.3, 6, 12), this.getMaterial(properties.color)); break;
+      case 'cylinder': mesh = new THREE.Mesh(new THREE.CylinderGeometry(properties.scale * 0.5, properties.scale * 0.5, properties.scale * 2, 8), this.getMaterial(properties.color)); break;
+      default: mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 8), this.getMaterial(0xffffff));
     }
-
     mesh.position.copy(position);
     mesh.userData = { id, type, properties, isGhost, isSolid: true };
-
-    if (isGhost) {
-      mesh.material.transparent = true;
-      mesh.material.opacity = 0.5;
-    }
-
+    if (isGhost) { mesh.material.transparent = true; mesh.material.opacity = 0.5; }
     this.scene.add(mesh);
     this.objects.set(id, mesh);
     return mesh;
@@ -297,14 +255,14 @@ export class Universe {
 
   updateObjectPosition(id, position) {
       const obj = this.objects.get(id);
-      if(obj) obj.position.lerp(position, 0.5); // Simple lerp
+      if(obj) obj.position.lerp(position, 0.5);
   }
 
   updateObjectProperties(id, properties) {
       const obj = this.objects.get(id);
       if(obj) {
           obj.userData.properties = { ...obj.userData.properties, ...properties };
-          this.updateObjectMaterial(obj); // Refresh material color/type
+          this.updateObjectMaterial(obj);
           if (properties.scale) obj.scale.setScalar(properties.scale);
       }
   }
@@ -313,28 +271,78 @@ export class Universe {
 
   toggleViewMode() {
     if (!this.hasPlayer) return;
-    if (document.pointerLockElement === this.canvas) {
-      document.exitPointerLock();
+    
+    // If currently in FPS mode (locked OR fallback), exit
+    if (this.viewMode === 'fps') {
+        this.exitFPS();
     } else {
-      this.canvas.requestPointerLock().catch(e => console.error(e));
+        this.enterFPS();
     }
   }
 
+  enterFPS() {
+      // Try to lock pointer
+      this.canvas.requestPointerLock({ unadjustedMovement: true })
+        .catch(e => {
+          console.warn("PointerLock (Unadjusted) failed:", e);
+          this.canvas.requestPointerLock().catch(err => {
+              console.error("PointerLock Default failed:", err);
+              this.onPointerLockError(); // Force fallback
+          });
+        });
+  }
+
+  exitFPS() {
+      if (document.pointerLockElement === this.canvas) {
+          document.exitPointerLock();
+      }
+      // If was in fallback mode (no lock), manually reset
+      this.viewMode = '3d';
+      this.onPointerLockChange(); // Force update UI/Camera
+  }
+
   onPointerLockChange() {
-    if (document.pointerLockElement === this.canvas) {
+    // Check if we are locked OR if we are forcing FPS (fallback check handled elsewhere, 
+    // but here we align UI based on state)
+    
+    // If we just lost lock, browser sets pointerLockElement to null.
+    // BUT we might want to stay in FPS mode if it was a glitch? 
+    // No, standard behavior: lost lock = exit FPS.
+    // UNLESS we are in explicit fallback mode? 
+    // Let's rely on the fact that if user pressed ESC, lock is lost.
+    
+    const isLocked = document.pointerLockElement === this.canvas;
+    
+    if (isLocked) {
       this.viewMode = 'fps';
       if(this.player) this.player.visible = false;
-      
-      // Update HUD
       document.getElementById('hud-mode').textContent = 'FPS MODE';
       document.getElementById('crosshair').classList.add('active');
       document.getElementById('btn-view-mode').innerHTML = '🌍 Sair do FPS (ESC)';
     } else {
-      this.viewMode = '3d';
-      if(this.player) this.player.visible = true;
-      this.resetCamera3D();
+      // Only switch back to 3D if we were not forcing fallback via error handler?
+      // Actually, if lock is lost, we generally want to exit.
+      // BUT if we are in "Fallback FPS", there is no lock to lose.
+      // So this event won't fire for Fallback exit unless we call exitPointerLock (which does nothing).
       
-      // Update HUD
+      // So we handle the "Exit" logic here for normal termination.
+      if (this.viewMode === 'fps' && !isLocked) {
+          // Check if we are in fallback mode? 
+          // If we are in fallback, this event MIGHT NOT FIRE.
+          // So we update UI just in case.
+      }
+      
+      this.viewMode = '3d';
+      if(this.player) {
+          this.player.visible = true;
+          this.camera.position.set(
+              this.player.position.x, 
+              this.player.position.y + 5, 
+              this.player.position.z + 10
+          );
+          this.camera.lookAt(this.player.position);
+          this.cameraRotation = { x: 0, y: 0 };
+      }
       document.getElementById('hud-mode').textContent = '3D ORBITAL';
       document.getElementById('crosshair').classList.remove('active');
       document.getElementById('btn-view-mode').innerHTML = '👁️ Entrar em FPS';
@@ -342,15 +350,17 @@ export class Universe {
   }
 
   onPointerLockError() {
-    console.error("Pointer Lock Error");
-    this.viewMode = '3d';
+    console.warn("Pointer Lock Failed - Enabling Fallback FPS Mode");
+    this.viewMode = 'fps';
+    if(this.player) this.player.visible = false;
+    document.getElementById('hud-mode').textContent = 'FPS (KEYBOARD)';
+    document.getElementById('crosshair').classList.add('active');
+    document.getElementById('btn-view-mode').innerHTML = '🌍 Sair (ESC)';
+    console.log("Fallback FPS enabled. Use Arrow Keys to look around.");
   }
 
   resetCamera3D() {
-    this.camera.rotation.set(0,0,0);
-    this.cameraRotation = { x: 0, y: 0 };
-    this.camera.position.set(0, 5, 12);
-    this.camera.lookAt(0,0,0);
+      // Optional
   }
 
   setupControls() {
@@ -358,67 +368,133 @@ export class Universe {
     document.addEventListener('keydown', (e) => {
       const k = e.key.toLowerCase();
       if(this.keys.hasOwnProperty(k)) this.keys[k] = true;
+      if(e.key === 'ArrowUp') this.keys.arrowUp = true;
+      if(e.key === 'ArrowDown') this.keys.arrowDown = true;
+      if(e.key === 'ArrowLeft') this.keys.arrowLeft = true;
+      if(e.key === 'ArrowRight') this.keys.arrowRight = true;
       if(k === ' ') this.keys.space = true;
+      
+      // Escape Handler for Fallback Mode
+      if (e.key === 'Escape' && this.viewMode === 'fps') {
+          this.exitFPS();
+      }
     });
     document.addEventListener('keyup', (e) => {
       const k = e.key.toLowerCase();
       if(this.keys.hasOwnProperty(k)) this.keys[k] = false;
+      if(e.key === 'ArrowUp') this.keys.arrowUp = false;
+      if(e.key === 'ArrowDown') this.keys.arrowDown = false;
+      if(e.key === 'ArrowLeft') this.keys.arrowLeft = false;
+      if(e.key === 'ArrowRight') this.keys.arrowRight = false;
       if(k === ' ') this.keys.space = false;
     });
 
-    // Mouse Move
+    // Mouse Move (FPS & Dragging)
     document.addEventListener('mousemove', (e) => {
-      if (this.viewMode === 'fps' && document.pointerLockElement === this.canvas) {
-        this.fpsYaw -= e.movementX * 0.002;
-        this.fpsPitch -= e.movementY * 0.002;
-        this.fpsPitch = Math.max(-1.5, Math.min(1.5, this.fpsPitch));
-      } else if (this.viewMode === '3d' && this.isRotating) {
-        // Orbit logic
-        const dx = e.clientX - this.lastMouseX;
-        const dy = e.clientY - this.lastMouseY;
-        this.cameraRotation.y += dx * 0.005;
-        this.cameraRotation.x += dy * 0.005;
-        this.cameraRotation.x = Math.max(-1.5, Math.min(1.5, this.cameraRotation.x));
-        this.lastMouseX = e.clientX;
-        this.lastMouseY = e.clientY;
-        
-        // Apply orbit
-        const r = this.cameraDistance;
-        this.camera.position.x = r * Math.sin(this.cameraRotation.y) * Math.cos(this.cameraRotation.x);
-        this.camera.position.y = r * Math.sin(this.cameraRotation.x) + 5;
-        this.camera.position.z = r * Math.cos(this.cameraRotation.y) * Math.cos(this.cameraRotation.x);
-        this.camera.lookAt(0,0,0);
-      }
-    });
-
-    // Mouse Down/Up
-    this.canvas.addEventListener('mousedown', (e) => {
+      // FPS Logic
+      if (this.viewMode === 'fps') {
+          // If locked, use movementX
+          if (document.pointerLockElement === this.canvas) {
+            this.fpsYaw -= e.movementX * 0.002;
+            this.fpsPitch -= e.movementY * 0.002;
+            this.fpsPitch = Math.max(-1.5, Math.min(1.5, this.fpsPitch));
+          }
+          // If NOT locked (Fallback), maybe ignore mouse or allow drag? 
+          // Let's rely on keys for fallback to avoid erratic behavior.
+          return;
+      } 
+      
+      // 3D Logic
       if (this.viewMode === '3d') {
-          if (e.button === 0) {
-              // Try select
+          // Drag Logic
+          if (this.isDragging && this.selectedObject) {
               this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
               this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
               this.raycaster.setFromCamera(this.mouse, this.camera);
-              const intersects = this.raycaster.intersectObjects(Array.from(this.objects.values()));
+              
+              const intersectPoint = new THREE.Vector3();
+              this.raycaster.ray.intersectPlane(this.dragPlane, intersectPoint);
+              
+              if (intersectPoint) {
+                  const newPos = intersectPoint.sub(this.offset);
+                  newPos.y = Math.max(0.5, newPos.y); // Keep above floor
+                  this.selectedObject.position.copy(newPos);
+                  
+                  // Optional: dispatch event if needed
+                  // window.dispatchEvent(new CustomEvent('object-moved', ...));
+              }
+              return;
+          }
+
+          // Orbit Logic
+          if (this.isRotating) {
+            const dx = e.clientX - this.lastMouseX;
+            const dy = e.clientY - this.lastMouseY;
+            this.cameraRotation.y += dx * 0.005;
+            this.cameraRotation.x += dy * 0.005;
+            this.cameraRotation.x = Math.max(-1.5, Math.min(1.5, this.cameraRotation.x));
+            
+            const r = this.cameraDistance;
+            this.camera.position.x = r * Math.sin(this.cameraRotation.y) * Math.cos(this.cameraRotation.x);
+            this.camera.position.y = r * Math.sin(this.cameraRotation.x) + 5;
+            this.camera.position.z = r * Math.cos(this.cameraRotation.y) * Math.cos(this.cameraRotation.x);
+            this.camera.lookAt(0,0,0);
+            
+            this.lastMouseX = e.clientX;
+            this.lastMouseY = e.clientY;
+          }
+      }
+    });
+
+    // Mouse Down (Select & Start Drag)
+    this.canvas.addEventListener('mousedown', (e) => {
+      if (this.viewMode === '3d') {
+          if (e.button === 0) {
+              this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+              this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+              this.raycaster.setFromCamera(this.mouse, this.camera);
+              
+              // Filter out ghost objects or non-selectable
+              const objects = Array.from(this.objects.values()).filter(o => !o.userData.isGhost);
+              const intersects = this.raycaster.intersectObjects(objects);
               
               if(intersects.length > 0) {
                   this.selectedObject = intersects[0].object;
-                  // Notify selection (e.g. for delete)
-                  window.dispatchEvent(new CustomEvent('object-selected', { detail: this.selectedObject.userData }));
+                  this.isDragging = true;
+                  
+                  // Setup Drag Plane at object position facing Up
+                  this.dragPlane.setFromNormalAndCoplanarPoint(
+                      new THREE.Vector3(0, 1, 0), 
+                      this.selectedObject.position
+                  );
+                  
+                  // Calculate Offset to prevent jumping
+                  const intersectPoint = new THREE.Vector3();
+                  this.raycaster.ray.intersectPlane(this.dragPlane, intersectPoint);
+                  this.offset.copy(intersectPoint).sub(this.selectedObject.position);
+                  
+                  this.canvas.style.cursor = 'grabbing';
               } else {
+                  // If clicked on nothing, rotate camera
                   this.isRotating = true;
                   this.lastMouseX = e.clientX;
                   this.lastMouseY = e.clientY;
+                  this.canvas.style.cursor = 'move';
               }
           }
       } else {
-          // FPS Shoot or Interact
+          // FPS: Lock pointer if not locked
           if(document.pointerLockElement !== this.canvas) this.canvas.requestPointerLock();
       }
     });
 
     window.addEventListener('mouseup', () => {
       this.isRotating = false;
+      this.isDragging = false;
+      this.selectedObject = null; // Deselect on release? Or keep selected? 
+      // User asked to drag, so we release drag state but maybe keep selection for menu.
+      // For now, let's just stop dragging.
+      this.canvas.style.cursor = 'default';
     });
     
     // Zoom
@@ -426,8 +502,7 @@ export class Universe {
         if(this.viewMode === '3d') {
             this.cameraDistance += e.deltaY * 0.01;
             this.cameraDistance = Math.max(5, Math.min(50, this.cameraDistance));
-            // Re-calc position
-             const r = this.cameraDistance;
+            const r = this.cameraDistance;
             this.camera.position.x = r * Math.sin(this.cameraRotation.y) * Math.cos(this.cameraRotation.x);
             this.camera.position.y = r * Math.sin(this.cameraRotation.x) + 5;
             this.camera.position.z = r * Math.cos(this.cameraRotation.y) * Math.cos(this.cameraRotation.x);
@@ -449,48 +524,67 @@ export class Universe {
     if (now - this.lastFrameTime < this.frameInterval) return;
     this.lastFrameTime = now;
 
-    if (this.viewMode === 'fps' && this.player) {
-      // FPS Physics
-      const speed = this.keys.shift ? 0.3 : 0.15;
-      const dir = new THREE.Vector3();
-      if(this.keys.w) dir.z = -1;
-      if(this.keys.s) dir.z = 1;
-      if(this.keys.a) dir.x = -1;
-      if(this.keys.d) dir.x = 1;
-      
-      // Rotate vector by Yaw
-      dir.applyAxisAngle(new THREE.Vector3(0,1,0), this.fpsYaw);
-      dir.multiplyScalar(speed);
-      
-      // Gravity
-      if(this.keys.space && this.isGrounded) {
-          this.playerVelocity.y = this.jumpPower;
-          this.isGrounded = false;
-      }
-      this.playerVelocity.y += this.gravity;
-      
-      // Apply
-      this.player.position.add(dir);
-      this.player.position.y += this.playerVelocity.y;
-      
-      // Floor collision
-      if(this.player.position.y < 0.1) {
-          this.player.position.y = 0.1;
-          this.playerVelocity.y = 0;
-          this.isGrounded = true;
-      }
-      
-      // Camera Follow
-      this.camera.position.copy(this.player.position);
-      this.camera.position.y += 1.6;
-      this.camera.rotation.order = 'YXZ';
-      this.camera.rotation.y = this.fpsYaw;
-      this.camera.rotation.x = this.fpsPitch;
-    }
+    try {
+        if (this.viewMode === 'fps' && this.player) {
+          const speed = this.keys.shift ? 0.3 : 0.15;
+          const dir = new THREE.Vector3();
+          if(this.keys.w) dir.z = -1;
+          if(this.keys.s) dir.z = 1;
+          if(this.keys.a) dir.x = -1;
+          if(this.keys.d) dir.x = 1;
+          
+          // Keyboard Rotation (Fallback)
+          if (this.keys.arrowLeft) this.fpsYaw += 0.05;
+          if (this.keys.arrowRight) this.fpsYaw -= 0.05;
+          if (this.keys.arrowUp) this.fpsPitch += 0.05;
+          if (this.keys.arrowDown) this.fpsPitch -= 0.05;
+          this.fpsPitch = Math.max(-1.5, Math.min(1.5, this.fpsPitch));
 
-    // Rotate objects logic? (Optional, maybe lightweight)
-    
-    this.renderer.render(this.scene, this.camera);
+          // Rotate input vector by Yaw
+          // Yaw is Y rotation. 
+          // In Three.js, rotation order usually requires care.
+          // We can just use trigonometry:
+          // Forward (Z-1) implies moving towards where we look.
+          
+          const moveX = dir.x * Math.cos(this.fpsYaw) - dir.z * Math.sin(this.fpsYaw);
+          const moveZ = dir.x * Math.sin(this.fpsYaw) + dir.z * Math.cos(this.fpsYaw);
+          
+          if (dir.lengthSq() > 0) {
+              this.player.position.x += moveX * speed;
+              this.player.position.z += moveZ * speed;
+          }
+          
+          // Gravity
+          if(this.keys.space && this.isGrounded) {
+              this.playerVelocity.y = this.jumpPower;
+              this.isGrounded = false;
+          }
+          this.playerVelocity.y += this.gravity;
+          
+          // Apply Y
+          this.player.position.y += this.playerVelocity.y;
+          
+          // Floor collision
+          if(this.player.position.y < 0.1) {
+              this.player.position.y = 0.1;
+              this.playerVelocity.y = 0;
+              this.isGrounded = true;
+          }
+          
+          // Camera Follow
+          this.camera.position.copy(this.player.position);
+          this.camera.position.y += 1.6;
+          this.camera.rotation.order = 'YXZ';
+          this.camera.rotation.y = this.fpsYaw;
+          this.camera.rotation.x = this.fpsPitch;
+        }
+
+        this.renderer.render(this.scene, this.camera);
+    } catch (e) {
+        console.error("Animate Error:", e);
+        // Fallback to safe state to prevent freeze loop?
+        this.viewMode = '3d'; 
+    }
   }
 
   cleanup() {
