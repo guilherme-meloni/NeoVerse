@@ -4,681 +4,341 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Multi Universe</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@400;600&display=swap" rel="stylesheet">
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+    :root {
+      --primary: #00ff88;
+      --secondary: #00ccff;
+      --bg-panel: rgba(10, 15, 20, 0.95);
+      --border: 1px solid rgba(0, 255, 136, 0.3);
+      --text: #e0e0e0;
+      --font-ui: 'Rajdhani', sans-serif;
+      --font-head: 'Orbitron', sans-serif;
     }
 
+    * { margin: 0; padding: 0; box-sizing: border-box; outline: none; user-select: none; }
+
     body {
-      font-family: monospace;
       background: #000;
-      color: #0f0;
       overflow: hidden;
       width: 100vw;
       height: 100vh;
-      cursor: default;
+      font-family: var(--font-ui);
+      color: var(--text);
     }
 
-    #canvas {
-      display: block;
-      width: 100%;
-      height: 100%;
-    }
+    /* CANVAS STYLES controlled by JS */
+    canvas { display: block; width: 100%; height: 100%; }
+    body.retro canvas { image-rendering: pixelated; }
+    body.ultra canvas { filter: contrast(1.1) saturate(1.2); }
 
-    body.dragging #canvas {
-      cursor: grabbing !important;
-    }
-
-    #hud {
+    /* MENU CONTAINER */
+    #main-menu {
       position: fixed;
-      top: 10px;
-      left: 10px;
-      background: rgba(0, 0, 0, 0.9);
-      padding: 10px;
-      border: 1px solid #0f0;
-      border-radius: 5px;
-      font-size: 11px;
-      z-index: 1000;
-      min-width: 200px;
-      user-select: none;
-    }
-
-    #hud h2 {
-      margin-bottom: 8px;
-      color: #0ff;
-      font-size: 13px;
-    }
-
-    #hud.fps-mode h2 {
-      color: #ff0;
-      animation: pulse 1s infinite;
-    }
-
-    .status-row {
-      margin: 3px 0;
-      display: flex;
-      align-items: center;
-    }
-
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      margin-right: 6px;
-      display: inline-block;
-    }
-
-    .dot-active {
-      background: #0f0;
-      box-shadow: 0 0 8px #0f0;
-    }
-
-    .dot-merging {
-      background: #ff0;
-      box-shadow: 0 0 8px #ff0;
-      animation: pulse 1s infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.3; }
-    }
-
-    #controls {
-      position: fixed;
-      bottom: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 5px;
-      z-index: 1000;
-      flex-wrap: wrap;
-      max-width: 90%;
-      justify-content: center;
-    }
-
-    .btn {
-      padding: 8px 12px;
-      background: rgba(0, 255, 0, 0.15);
-      border: 1px solid #0f0;
-      border-radius: 5px;
-      color: #0f0;
-      font-size: 11px;
-      font-weight: bold;
-      cursor: pointer;
-      transition: all 0.2s;
-      font-family: monospace;
-      user-select: none;
-    }
-
-    .btn:hover {
-      background: rgba(0, 255, 0, 0.3);
-    }
-
-    .btn:active {
-      transform: scale(0.95);
-    }
-
-    .icon-svg {
-      width: 16px;
-      height: 16px;
-      fill: currentColor;
-      vertical-align: middle;
-    }
-
-    #object-list {
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      background: rgba(0, 0, 0, 0.9);
-      padding: 10px;
-      border: 1px solid #0f0;
-      border-radius: 5px;
-      max-height: 250px;
-      overflow-y: auto;
-      z-index: 1000;
-      min-width: 150px;
-      font-size: 10px;
-      user-select: none;
-    }
-
-    #object-list h3 {
-      color: #0ff;
-      margin-bottom: 5px;
-      font-size: 11px;
-    }
-
-    .object-item {
-      padding: 3px 5px;
-      margin: 2px 0;
-      border-left: 2px solid #0f0;
-      font-size: 10px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .object-item:hover {
-      background: rgba(0, 255, 0, 0.2);
-      padding-left: 8px;
-    }
-
-    .object-item.ghost {
-      border-left-color: #ff0;
-      color: #ff0;
-      opacity: 0.8;
-    }
-
-    .object-item.selected {
-      background: rgba(0, 255, 0, 0.3);
-      border-left-width: 3px;
-    }
-
-    #info {
-      position: fixed;
-      bottom: 60px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0, 255, 255, 0.1);
-      border: 1px solid #0ff;
-      padding: 5px 15px;
-      border-radius: 5px;
-      font-size: 10px;
-      color: #0ff;
-      z-index: 1000;
-      pointer-events: none;
-      user-select: none;
-      text-align: center;
-    }
-
-    .tooltip {
-      position: fixed;
-      background: rgba(0, 255, 255, 0.95);
-      color: #000;
-      padding: 5px 10px;
-      border-radius: 4px;
-      font-size: 10px;
-      font-weight: bold;
-      z-index: 2000;
-      pointer-events: none;
-      animation: slideUp 0.3s;
-      user-select: none;
-    }
-
-    @keyframes slideUp {
-      from { transform: translateY(10px); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
-    }
-
-    * {
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
-
-    #object-list::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    #object-list::-webkit-scrollbar-track {
-      background: rgba(0, 255, 0, 0.1);
-    }
-
-    #object-list::-webkit-scrollbar-thumb {
-      background: rgba(0, 255, 0, 0.3);
-      border-radius: 3px;
-    }
-
-    #crosshair {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 20px;
-      height: 20px;
-      display: none;
-      z-index: 9999;
-      pointer-events: none;
-    }
-
-    #crosshair::before,
-    #crosshair::after {
-      content: '';
-      position: absolute;
-      background: #0ff;
-      box-shadow: 0 0 5px #0ff;
-    }
-
-    #crosshair::before {
-      top: 50%;
       left: 0;
-      width: 100%;
-      height: 2px;
-      transform: translateY(-50%);
-    }
-
-    #crosshair::after {
-      left: 50%;
       top: 0;
-      width: 2px;
-      height: 100%;
-      transform: translateX(-50%);
+      bottom: 0;
+      width: 260px;
+      background: var(--bg-panel);
+      border-right: 1px solid var(--primary);
+      display: flex;
+      flex-direction: column;
+      transform: translateX(-260px);
+      transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+      z-index: 2000;
+      box-shadow: 0 0 20px rgba(0, 255, 136, 0.1);
     }
 
-    #crosshair.active {
-      display: block;
-    }
+    #main-menu.open { transform: translateX(0); }
 
-    /* Menu de Edição - NO CANTO PARA NÃO ATRAPALHAR */
-    #edit-menu {
-      position: fixed;
-      top: 280px;
-      right: 10px;
-      z-index: 5000;
-      animation: slideInRight 0.3s;
-    }
-
-    @keyframes slideInRight {
-      from { opacity: 0; transform: translateX(100px); }
-      to { opacity: 1; transform: translateX(0); }
-    }
-
-    .edit-panel {
-      background: rgba(0, 0, 0, 0.95);
-      border: 2px solid #0ff;
-      border-radius: 8px;
-      padding: 12px;
-      width: 250px;
-      box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
-    }
-
-    .edit-header {
+    /* MENU HEADER */
+    .menu-header {
+      padding: 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 10px;
-      border-bottom: 1px solid #0ff;
-      padding-bottom: 8px;
     }
 
-    .edit-header h3 {
-      color: #0ff;
-      font-size: 12px;
-      margin: 0;
-    }
-
-    .close-btn {
-      background: rgba(255, 0, 0, 0.2);
-      border: 1px solid #f00;
-      color: #f00;
-      padding: 3px 8px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-family: monospace;
-      font-weight: bold;
-      font-size: 10px;
-      transition: all 0.2s;
-    }
-
-    .close-btn:hover {
-      background: rgba(255, 0, 0, 0.4);
-    }
-
-    .edit-content {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .edit-row {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .edit-row label {
-      color: #0f0;
-      font-size: 10px;
-      font-weight: bold;
-    }
-
-    .edit-row input[type="color"] {
-      width: 100%;
-      height: 35px;
-      border: 1px solid #0f0;
-      border-radius: 4px;
-      cursor: pointer;
-      background: #000;
-    }
-
-    .edit-row input[type="range"] {
-      width: 100%;
-      height: 5px;
-      background: rgba(0, 255, 0, 0.2);
-      outline: none;
-      border-radius: 5px;
-    }
-
-    .edit-row input[type="range"]::-webkit-slider-thumb {
-      appearance: none;
-      width: 15px;
-      height: 15px;
-      background: #0f0;
-      cursor: pointer;
-      border-radius: 50%;
-      box-shadow: 0 0 5px #0f0;
-    }
-
-    .edit-row input[type="checkbox"] {
-      width: 15px;
-      height: 15px;
-      cursor: pointer;
-      margin-right: 5px;
-    }
-
-    .edit-actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 8px;
-    }
-
-    .btn-apply {
-      flex: 1;
-      padding: 8px;
-      background: rgba(0, 255, 0, 0.2);
-      border: 1px solid #0f0;
-      color: #0f0;
-      border-radius: 4px;
-      cursor: pointer;
-      font-family: monospace;
-      font-weight: bold;
-      font-size: 10px;
-      transition: all 0.2s;
-    }
-
-    .btn-apply:hover {
-      background: rgba(0, 255, 0, 0.4);
-    }
-
-    .btn-delete {
-      flex: 1;
-      padding: 8px;
-      background: rgba(255, 0, 0, 0.2);
-      border: 1px solid #f00;
-      color: #f00;
-      border-radius: 4px;
-      cursor: pointer;
-      font-family: monospace;
-      font-weight: bold;
-      font-size: 10px;
-      transition: all 0.2s;
-    }
-
-    .btn-delete:hover {
-      background: rgba(255, 0, 0, 0.4);
-    }
-
-    #scale-value {
-      color: #0ff;
-      font-weight: bold;
-    }
-
-    /* Painel de Rede */
-    #network-panel {
-      position: fixed;
-      bottom: 60px;
-      left: 10px;
-      z-index: 5000;
-      animation: slideInLeft 0.3s;
-    }
-
-    @keyframes slideInLeft {
-      from { opacity: 0; transform: translateX(-100px); }
-      to { opacity: 1; transform: translateX(0); }
-    }
-
-    .network-content {
-      background: rgba(0, 0, 0, 0.95);
-      border: 2px solid #0ff;
-      border-radius: 8px;
-      padding: 12px;
-      width: 280px;
-      box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
-    }
-
-    .network-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 10px;
-      border-bottom: 1px solid #0ff;
-      padding-bottom: 8px;
-    }
-
-    .network-header h3 {
-      color: #0ff;
-      font-size: 12px;
-      margin: 0;
-    }
-
-    .network-body {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .network-row {
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-    }
-
-    .network-row label {
-      color: #0f0;
-      font-size: 10px;
-      font-weight: bold;
-    }
-
-    .code-display {
-      background: rgba(0, 255, 255, 0.2);
-      border: 1px solid #0ff;
-      border-radius: 4px;
-      padding: 8px;
-      text-align: center;
+    .menu-header h1 {
+      font-family: var(--font-head);
       font-size: 18px;
-      font-weight: bold;
-      letter-spacing: 3px;
-      color: #0ff;
-      font-family: monospace;
-    }
-
-    #remote-code-input {
-      background: rgba(0, 0, 0, 0.8);
-      border: 1px solid #0f0;
-      border-radius: 4px;
-      padding: 8px;
-      color: #0f0;
-      font-size: 14px;
-      font-weight: bold;
-      letter-spacing: 2px;
-      text-align: center;
-      font-family: monospace;
+      color: var(--primary);
       text-transform: uppercase;
+      letter-spacing: 2px;
     }
 
-    #remote-code-input:focus {
-      outline: none;
-      border-color: #0ff;
-      box-shadow: 0 0 5px #0ff;
+    /* MENU TABS */
+    .menu-tabs {
+      display: flex;
+      background: rgba(0,0,0,0.5);
     }
 
-    .btn-connect {
-      background: rgba(0, 255, 0, 0.2);
-      border: 1px solid #0f0;
-      color: #0f0;
-      padding: 8px;
-      border-radius: 4px;
+    .tab-btn {
+      flex: 1;
+      padding: 12px 0;
+      background: transparent;
+      border: none;
+      color: #666;
       cursor: pointer;
-      font-family: monospace;
-      font-weight: bold;
+      font-family: var(--font-head);
       font-size: 10px;
-      transition: all 0.2s;
+      transition: 0.2s;
+      border-bottom: 2px solid transparent;
     }
 
-    .btn-connect:hover {
-      background: rgba(0, 255, 0, 0.4);
+    .tab-btn:hover { color: #fff; }
+    .tab-btn.active { color: var(--secondary); border-bottom-color: var(--secondary); background: rgba(0, 204, 255, 0.1); }
+
+    /* TAB CONTENT */
+    .tab-content {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: none;
     }
 
-    .btn-toggle {
-      background: rgba(0, 255, 255, 0.2);
-      border: 1px solid #0ff;
-      color: #0ff;
+    .tab-content.active { display: flex; flex-direction: column; gap: 15px; animation: fadeIn 0.3s; }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* CONTROLS */
+    .control-group { margin-bottom: 10px; }
+    .control-label { font-size: 12px; color: #888; margin-bottom: 5px; display: block; text-transform: uppercase; }
+
+    button.ui-btn {
+      width: 100%;
       padding: 10px;
+      margin-bottom: 8px;
+      background: rgba(0, 255, 136, 0.05);
+      border: 1px solid rgba(0, 255, 136, 0.2);
+      color: var(--primary);
+      font-family: var(--font-ui);
+      font-weight: 600;
+      text-transform: uppercase;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: 0.2s;
+    }
+
+    button.ui-btn:hover { background: rgba(0, 255, 136, 0.15); border-color: var(--primary); box-shadow: 0 0 10px rgba(0,255,136,0.2); }
+    button.ui-btn svg { width: 18px; height: 18px; fill: currentColor; }
+
+    /* QUALITY CARDS */
+    .quality-card {
+      border: 1px solid #333;
+      padding: 15px;
       border-radius: 4px;
       cursor: pointer;
-      font-family: monospace;
-      font-weight: bold;
-      font-size: 10px;
-      transition: all 0.2s;
+      opacity: 0.6;
+      transition: 0.3s;
+      background: linear-gradient(45deg, #000, #111);
+    }
+    
+    .quality-card:hover { opacity: 1; }
+    
+    .quality-card.active {
+      opacity: 1;
+      border-color: var(--secondary);
+      box-shadow: 0 0 15px rgba(0, 204, 255, 0.2);
     }
 
-    .btn-toggle:hover {
-      background: rgba(0, 255, 255, 0.4);
-    }
+    .quality-card h3 { font-family: var(--font-head); font-size: 14px; margin-bottom: 5px; color: #fff; }
+    .quality-card p { font-size: 11px; color: #888; line-height: 1.4; }
 
-    .btn-toggle.connected {
-      background: rgba(0, 255, 0, 0.2);
-      border-color: #0f0;
-      color: #0f0;
+    /* TOGGLE MENU BTN */
+    #menu-toggle {
+      position: fixed;
+      top: 15px;
+      left: 15px;
+      z-index: 2001;
+      background: rgba(0,0,0,0.8);
+      border: 1px solid var(--primary);
+      color: var(--primary);
+      width: 40px;
+      height: 40px;
+      border-radius: 4px; /* Default square-ish */
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      transition: 0.3s;
     }
+    
+    body.ultra #menu-toggle { border-radius: 50%; box-shadow: 0 0 10px var(--primary); }
+    #menu-toggle:hover { background: var(--primary); color: #000; }
 
-    .network-info {
-      margin-top: 5px;
+    /* HUD */
+    #hud-overlay {
+      position: fixed;
+      top: 15px;
+      right: 15px;
+      text-align: right;
+      pointer-events: none;
+      z-index: 1000;
+    }
+    
+    .hud-stat { font-family: var(--font-head); color: var(--secondary); font-size: 14px; margin-bottom: 5px; text-shadow: 0 0 5px rgba(0, 204, 255, 0.5); }
+    .hud-sub { color: #666; font-size: 10px; }
+
+    /* CROSSHAIR */
+    #crosshair {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 4px; height: 4px; background: var(--primary);
+      border-radius: 50%; pointer-events: none; z-index: 1000; display: none;
+    }
+    #crosshair.active { display: block; }
+
+    /* INPUTS */
+    input.ui-input {
+      width: 100%;
+      background: rgba(0,0,0,0.5);
+      border: 1px solid #333;
       padding: 8px;
-      background: rgba(0, 255, 255, 0.1);
-      border-radius: 4px;
-      border-left: 2px solid #0ff;
+      color: #fff;
+      font-family: var(--font-ui);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      text-align: center;
     }
+    input.ui-input:focus { border-color: var(--secondary); }
 
-    .network-info small {
-      color: #0ff;
-      font-size: 9px;
-      line-height: 1.4;
-    }
   </style>
 </head>
-<body>
+<body class="retro"> <!-- Default to Retro -->
+
   <canvas id="canvas"></canvas>
+  <div id="crosshair"></div>
 
-  <div id="hud">
-    <h2>🌌 Multi Universe</h2>
-    <div class="status-row">
-      <span class="status-dot dot-active" id="status-dot"></span>
-      <span id="status-text">Ativo</span>
-    </div>
-    <div class="status-row">
-      🪟 #<span id="window-id">1</span>
-    </div>
-    <div class="status-row" id="player-status" style="display:none;">
-      🧍 Player: ✓
-    </div>
-    <div class="status-row" id="view-mode" style="display:none;">
-      👁️ Visão: <span id="view-text">3D</span>
-    </div>
-    <div class="status-row">
-      🎯 Objetos: <span id="object-count">0</span>
-    </div>
-    <div class="status-row">
-      🔗 Janelas: <span id="window-count">1</span>
-    </div>
-    <div class="status-row">
-      ⚡ Overlaps: <span id="overlap-count">0</span>
-    </div>
-    <div class="status-row">
-      🌐 Rede: <span id="network-status" style="color:#f00;">Offline</span>
-    </div>
-    <div class="status-row">
-      🔑 Código: <span id="network-code" style="color:#0ff;">------</span>
-    </div>
-    <div class="status-row">
-      🔗 Remotos: <span id="merged-count">0</span>
-    </div>
-    <div class="status-row" style="font-size: 9px; color: #888; margin-top: 5px;">
-      💻 RAM: <span id="memory">--</span>
-    </div>
-  </div>
+  <!-- TOGGLE BUTTON -->
+  <button id="menu-toggle" onclick="toggleMenu()">
+    <svg style="width:24px;height:24px" viewBox="0 0 24 24"><path fill="currentColor" d="M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z" /></svg>
+  </button>
 
-  <div id="object-list">
-    <h3>📦 Objetos</h3>
-    <div id="objects-container">Nenhum</div>
-  </div>
+  <!-- SIDEBAR MENU -->
+  <div id="main-menu">
+    <div class="menu-header">
+      <h1>Multi Universe</h1>
+    </div>
 
-  <div id="controls">
-    <button class="btn" id="new-window-btn" title="Nova Janela">
-      <svg class="icon-svg" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-    </button>
-    <button class="btn" id="view-btn" style="display:none;" title="Alternar Visão">
-      <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
-    </button>
-    <button class="btn" id="network-btn" title="Rede">
-      <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
-    </button>
-    <button class="btn" id="sphere-btn" title="Esfera">
-      <svg class="icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>
-    </button>
-    <button class="btn" id="cube-btn" title="Cubo">
-      <svg class="icon-svg" viewBox="0 0 24 24"><path d="M3 3h18v18H3z"/></svg>
-    </button>
-    <button class="btn" id="node-btn" title="Luz/Node">
-      <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 2l2.4 7.2h7.6l-6 4.8 2.4 7.2-6-4.8-6 4.8 2.4-7.2-6-4.8h7.6z"/></svg>
-    </button>
-    <button class="btn" id="pyramid-btn" title="Pirâmide">
-      <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 2L2 22h20L12 2z"/></svg>
-    </button>
-    <button class="btn" id="torus-btn" title="Torus">
-      <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>
-    </button>
-    <button class="btn" id="cylinder-btn" title="Cilindro">
-      <svg class="icon-svg" viewBox="0 0 24 24"><path d="M6 4v16c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2H8c-1.1 0-2 .9-2 2z"/></svg>
-    </button>
-  </div>
+    <div class="menu-tabs">
+      <button class="tab-btn active" onclick="openTab('objects')">OBJ</button>
+      <button class="tab-btn" onclick="openTab('world')">MUNDO</button>
+      <button class="tab-btn" onclick="openTab('net')">REDE</button>
+      <button class="tab-btn" onclick="openTab('gfx')">GFX</button>
+    </div>
 
-  <div id="network-panel" style="display:none;">
-    <div class="network-content">
-      <div class="network-header">
-        <h3>🌐 Conexão Remota</h3>
-        <button class="close-btn" onclick="window.closeNetworkPanel()">✕</button>
+    <!-- TAB: OBJECTS -->
+    <div id="tab-objects" class="tab-content active">
+      <div class="control-group">
+        <label class="control-label">Adicionar Primitivos</label>
+        <button class="ui-btn" id="btn-sphere"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg> Esfera</button>
+        <button class="ui-btn" id="btn-cube"><svg viewBox="0 0 24 24"><path d="M3 3h18v18H3z"/></svg> Cubo</button>
+        <button class="ui-btn" id="btn-pyramid"><svg viewBox="0 0 24 24"><path d="M12 2L2 22h20L12 2z"/></svg> Pirâmide</button>
+        <button class="ui-btn" id="btn-cylinder"><svg viewBox="0 0 24 24"><path d="M6 4v16c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2H8c-1.1 0-2 .9-2 2z"/></svg> Cilindro</button>
+        <button class="ui-btn" id="btn-torus"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg> Anel</button>
+        <button class="ui-btn" id="btn-node" style="color:#ffcc00; border-color: #ffcc0044"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.2h7.6l-6 4.8 2.4 7.2-6-4.8-6 4.8 2.4-7.2-6-4.8h7.6z"/></svg> Luz/Node</button>
+      </div>
+      <div class="control-group">
+        <label class="control-label">Ações</label>
+        <button class="ui-btn" style="border-color:#ff4444; color:#ff4444" id="btn-delete">🗑️ Remover Seleção</button>
+      </div>
+    </div>
+
+    <!-- TAB: WORLD -->
+    <div id="tab-world" class="tab-content">
+      <div class="control-group">
+        <label class="control-label">Janelas</label>
+        <button class="ui-btn" id="btn-new-window">🪟 Nova Janela</button>
+        <div style="font-size: 10px; color: #666; margin-top:5px">Cria um novo universo em janela separada.</div>
       </div>
       
-      <div class="network-body">
-        <div class="network-row">
-          <label>Seu Código:</label>
-          <div class="code-display" id="my-code-display">------</div>
-        </div>
-        
-        <div class="network-row">
-          <label>Conectar a:</label>
-          <input type="text" id="remote-code-input" placeholder="ABC123" maxlength="6" style="text-transform:uppercase;">
-          <button class="btn-connect" onclick="window.connectRemote()">🔗 Conectar</button>
-        </div>
+      <div class="control-group">
+        <label class="control-label">Modo de Visão</label>
+        <button class="ui-btn" id="btn-view-mode">👁️ Alternar FPS / 3D</button>
+        <div style="font-size: 10px; color: #666; margin-top:5px">FPS: Mouse trava. ESC para sair.</div>
+      </div>
+    </div>
 
-        <div class="network-row">
-          <button class="btn-toggle" id="network-toggle" onclick="window.toggleNetwork()">🔌 Conectar Servidor</button>
-        </div>
+    <!-- TAB: NETWORK -->
+    <div id="tab-net" class="tab-content">
+      <div class="control-group">
+        <label class="control-label">Meu Código</label>
+        <div id="net-my-code" style="font-family: monospace; font-size: 20px; color: var(--secondary); text-align: center; margin: 10px 0; letter-spacing: 3px; font-weight: bold;">OFFLINE</div>
+        <button class="ui-btn" id="btn-net-toggle">🔌 Conectar</button>
+      </div>
 
-        <div class="network-info">
-          <small>💡 Digite um código de 6 caracteres para mesclar com outro universo remoto</small>
-        </div>
+      <hr style="border: 0; border-top: 1px solid #333; margin: 15px 0;">
+
+      <div class="control-group">
+        <label class="control-label">Conexão Remota</label>
+        <input type="text" id="net-input-code" class="ui-input" placeholder="CÓDIGO (6 DIG)" maxlength="6">
+        <button class="ui-btn" id="btn-net-connect">🔗 Mesclar Universos</button>
+      </div>
+    </div>
+
+    <!-- TAB: GRAPHICS -->
+    <div id="tab-gfx" class="tab-content">
+      <label class="control-label">Qualidade Gráfica</label>
+      
+      <div class="quality-card active" id="q-retro" onclick="setQuality('retro')">
+        <h3>👾 RETRO (Low End)</h3>
+        <p>Ultra-rápido. Pixelado. Sem luzes. Geometria simples. Ideal para seu hardware.</p>
+      </div>
+
+      <div class="quality-card" id="q-ultra" onclick="setQuality('ultra')" style="margin-top: 10px;">
+        <h3>✨ ULTRA (Beauty)</h3>
+        <p>Luzes, sombras, brilho (fake), suavização. Pesado. Use com cuidado.</p>
+      </div>
+
+      <div style="margin-top: 20px; font-size: 10px; color: #444;">
+        Render: <span id="debug-fps">--</span> FPS
       </div>
     </div>
   </div>
 
-  <div id="info">
-    💡 V = FPS • ESC = Sair FPS • Mouse = Olhar • WASD = Mover • Shift = Correr • Space = Pular<br>
-    🖱️ Clique em objetos para editar • Delete = Remover
+  <!-- HUD OVERLAY -->
+  <div id="hud-overlay">
+    <div class="hud-stat" id="hud-mode">3D ORBITAL</div>
+    <div class="hud-sub" id="hud-coords">X: 0 Y: 0</div>
   </div>
 
-  <div id="crosshair"></div>
+  <!-- SCRIPTS -->
+  <script>
+    // UI LOGIC
+    function toggleMenu() {
+      document.getElementById('main-menu').classList.toggle('open');
+    }
+
+    function openTab(name) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      
+      document.getElementById('tab-' + name).classList.add('active');
+      // Find the button that called this... roughly
+      const btns = document.querySelectorAll('.tab-btn');
+      if(name === 'objects') btns[0].classList.add('active');
+      if(name === 'world') btns[1].classList.add('active');
+      if(name === 'net') btns[2].classList.add('active');
+      if(name === 'gfx') btns[3].classList.add('active');
+    }
+
+    // Global bridge for Universe.js to call
+    window.updateQualityUI = (mode) => {
+      document.querySelectorAll('.quality-card').forEach(c => c.classList.remove('active'));
+      document.body.classList.remove('retro', 'ultra');
+      
+      if(mode === 'retro') {
+        document.getElementById('q-retro').classList.add('active');
+        document.body.classList.add('retro');
+      } else {
+        document.getElementById('q-ultra').classList.add('active');
+        document.body.classList.add('ultra');
+      }
+    }
+  </script>
 
   <script type="importmap">
     {
@@ -687,7 +347,6 @@
       }
     }
   </script>
-
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
