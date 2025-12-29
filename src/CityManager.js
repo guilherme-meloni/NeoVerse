@@ -230,7 +230,7 @@ export class CityManager {
         { min: [-w/2, 0, d/2], max: [w/2, h, d/2 + wallThick] },   // Front
         { min: [-w/2 - wallThick, 0, -d/2], max: [-w/2, h, d/2] }, // Left
         { min: [w/2, 0, -d/2], max: [w/2 + wallThick, h, d/2] },   // Right
-        { min: [-w/2, -1, -d/2], max: [w/2, 0, d/2] },              // Floor for player
+        { min: [-w/2, -5, -d/2], max: [w/2, -0.1, d/2] },           // Floor (FIXED: lowered to -0.1)
         { min: [-w/2, h, -d/2], max: [w/2, h+1, d/2] }              // Ceiling
     ];
 
