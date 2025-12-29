@@ -142,7 +142,8 @@ function setupUI() {
       objectManager.createFileSystemRoom();
   });
 
-  document.getElementById('btn-view-mode').addEventListener('click', () => {
+  document.getElementById('btn-view-mode').addEventListener('click', (e) => {
+      e.target.blur(); // Remove focus to prevent Spacebar re-trigger
       universe.toggleViewMode();
   });
   

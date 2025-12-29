@@ -78,6 +78,11 @@ export class CityManager {
     floor.rotation.x = -Math.PI / 2;
     this.universe.scene.add(floor);
 
+    // GRADE DE NEON (Para noção de espaço)
+    const gridHelper = new THREE.GridHelper(200, 50, this.colors.neonBlue, 0x111122);
+    gridHelper.position.y = 0.1; // Pouco acima do chão
+    this.universe.scene.add(gridHelper);
+
     // Gerar Prédios
     entries.forEach((entry, index) => {
         const col = index % cols;
@@ -294,16 +299,16 @@ export class CityManager {
 
   createLabel(text, scale=1) {
     const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 64;
+    canvas.width = 512; // Dobro da resolução
+    canvas.height = 128;
     const ctx = canvas.getContext('2d');
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillRect(0,0,256,64);
-    ctx.font = 'bold 32px monospace';
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; // Fundo um pouco mais escuro
+    ctx.fillRect(0,0,512,128);
+    ctx.font = 'bold 50px monospace'; // Fonte maior
+    ctx.fillStyle = '#00ffff'; // Neon Cyan
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text.substring(0, 15), 128, 32);
+    ctx.fillText(text.substring(0, 20), 256, 64);
     
     const tex = new THREE.CanvasTexture(canvas);
     const mat = new THREE.SpriteMaterial({ map: tex });

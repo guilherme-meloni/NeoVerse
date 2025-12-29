@@ -421,8 +421,6 @@ export class Universe {
     return mesh;
   }
 
-  // ... (dblclick listener update below)
-
   removeObject(id) {
     const obj = this.objects.get(id);
     if (obj) {
@@ -461,36 +459,25 @@ export class Universe {
   }
 
   enterFPS() {
-      // Try to lock pointer
-      this.canvas.requestPointerLock({ unadjustedMovement: true })
-        .catch(e => {
-          console.warn("PointerLock (Unadjusted) failed:", e);
-          this.canvas.requestPointerLock().catch(err => {
-              console.error("PointerLock Default failed:", err);
-              this.onPointerLockError(); // Force fallback
-          });
-        });
+      // Focus canvas first to ensure keyboard events go there
+      this.canvas.focus();
+      
+      // Simple lock for better compatibility
+      this.canvas.requestPointerLock().catch(err => {
+          console.error("PointerLock failed:", err);
+          this.onPointerLockError();
+      });
   }
 
   exitFPS() {
       if (document.pointerLockElement === this.canvas) {
           document.exitPointerLock();
       }
-      // If was in fallback mode (no lock), manually reset
       this.viewMode = '3d';
-      this.onPointerLockChange(); // Force update UI/Camera
+      this.onPointerLockChange(); 
   }
 
   onPointerLockChange() {
-    // Check if we are locked OR if we are forcing FPS (fallback check handled elsewhere, 
-    // but here we align UI based on state)
-    
-    // If we just lost lock, browser sets pointerLockElement to null.
-    // BUT we might want to stay in FPS mode if it was a glitch? 
-    // No, standard behavior: lost lock = exit FPS.
-    // UNLESS we are in explicit fallback mode? 
-    // Let's rely on the fact that if user pressed ESC, lock is lost.
-    
     const isLocked = document.pointerLockElement === this.canvas;
     
     if (isLocked) {
@@ -500,18 +487,6 @@ export class Universe {
       document.getElementById('crosshair').classList.add('active');
       document.getElementById('btn-view-mode').innerHTML = '🌍 Sair do FPS (ESC)';
     } else {
-      // Only switch back to 3D if we were not forcing fallback via error handler?
-      // Actually, if lock is lost, we generally want to exit.
-      // BUT if we are in "Fallback FPS", there is no lock to lose.
-      // So this event won't fire for Fallback exit unless we call exitPointerLock (which does nothing).
-      
-      // So we handle the "Exit" logic here for normal termination.
-      if (this.viewMode === 'fps' && !isLocked) {
-          // Check if we are in fallback mode? 
-          // If we are in fallback, this event MIGHT NOT FIRE.
-          // So we update UI just in case.
-      }
-      
       this.viewMode = '3d';
       if(this.player) {
           this.player.visible = true;
@@ -574,8 +549,18 @@ export class Universe {
       // FPS Logic
       if (this.viewMode === 'fps') {
           if (document.pointerLockElement === this.canvas) {
-            this.fpsYaw -= e.movementX * 0.002;
-            this.fpsPitch -= e.movementY * 0.002;
+            // Clamp huge jumps (common in some linux WMs/drivers)
+            const sensitivity = 0.002;
+            const maxDelta = 100; // Pixels
+            
+            let dx = e.movementX;
+            let dy = e.movementY;
+            
+            // Ignore jumps larger than maxDelta (likely cursor re-center artifact)
+            if (Math.abs(dx) > maxDelta || Math.abs(dy) > maxDelta) return;
+
+            this.fpsYaw -= dx * sensitivity;
+            this.fpsPitch -= dy * sensitivity;
             this.fpsPitch = Math.max(-1.5, Math.min(1.5, this.fpsPitch));
           }
           return;
@@ -792,63 +777,57 @@ export class Universe {
 
     try {
         if (this.viewMode === 'fps' && this.player) {
-          const speed = this.keys.shift ? 0.3 : 0.15;
-          const dir = new THREE.Vector3();
-          if(this.keys.w) dir.z = -1;
-          if(this.keys.s) dir.z = 1;
-          if(this.keys.a) dir.x = -1;
-          if(this.keys.d) dir.x = 1;
+          const speed = this.keys.shift ? 0.4 : 0.2; // Sightly faster
           
-          // Keyboard Rotation (Fallback)
-          if (this.keys.arrowLeft) this.fpsYaw += 0.05;
-          if (this.keys.arrowRight) this.fpsYaw -= 0.05;
-          if (this.keys.arrowUp) this.fpsPitch += 0.05;
-          if (this.keys.arrowDown) this.fpsPitch -= 0.05;
-          this.fpsPitch = Math.max(-1.5, Math.min(1.5, this.fpsPitch));
+          // --- NEW MOVEMENT LOGIC (Camera Relative) ---
+          // Get the direction the camera is looking
+          const forward = new THREE.Vector3();
+          this.camera.getWorldDirection(forward);
+          forward.y = 0; // Flatten (don't fly up/down)
+          forward.normalize();
 
-          // Rotate input vector by Yaw
-          // Yaw is Y rotation. 
-          // In Three.js, rotation order usually requires care.
-          // We can just use trigonometry:
-          // Forward (Z-1) implies moving towards where we look.
+          const right = new THREE.Vector3();
+          right.crossVectors(forward, this.camera.up).normalize();
+
+          if (this.keys.w) this.player.position.add(forward.clone().multiplyScalar(speed));
+          if (this.keys.s) this.player.position.add(forward.clone().multiplyScalar(-speed));
+          if (this.keys.d) this.player.position.add(right.clone().multiplyScalar(speed));
+          if (this.keys.a) this.player.position.add(right.clone().multiplyScalar(-speed));
           
-          const moveX = dir.x * Math.cos(this.fpsYaw) - dir.z * Math.sin(this.fpsYaw);
-          const moveZ = dir.x * Math.sin(this.fpsYaw) + dir.z * Math.cos(this.fpsYaw);
+          // --- ROTATION (Mouse Look) ---
+          // Update Yaw/Pitch from mouse movement (handled in mousemove event)
+          // We apply the rotation to the Camera primarily
+          this.camera.rotation.order = 'YXZ';
+          this.camera.rotation.y = this.fpsYaw;
+          this.camera.rotation.x = this.fpsPitch;
+
+          // Sync player body rotation to camera yaw (so the body faces where we look)
+          // but we usually just move the position.
           
-          if (dir.lengthSq() > 0) {
-              this.player.position.x += moveX * speed;
-              this.player.position.z += moveZ * speed;
-          }
-          
-          // Gravity
+          // --- PHYSICS (Gravity) ---
           if(this.keys.space && this.isGrounded) {
               this.playerVelocity.y = this.jumpPower;
               this.isGrounded = false;
           }
           this.playerVelocity.y += this.gravity;
           
-          // Apply Y
           this.player.position.y += this.playerVelocity.y;
           
-          // Floor collision
           if(this.player.position.y < 0.1) {
               this.player.position.y = 0.1;
               this.playerVelocity.y = 0;
               this.isGrounded = true;
           }
           
-          // Camera Follow
+          // Lock Camera to Player Head
           this.camera.position.copy(this.player.position);
           this.camera.position.y += 1.6;
-          this.camera.rotation.order = 'YXZ';
-          this.camera.rotation.y = this.fpsYaw;
-          this.camera.rotation.x = this.fpsPitch;
+
         }
 
         this.renderer.render(this.scene, this.camera);
     } catch (e) {
         console.error("Animate Error:", e);
-        // Fallback to safe state to prevent freeze loop?
         this.viewMode = '3d'; 
     }
   }
