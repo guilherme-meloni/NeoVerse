@@ -99,8 +99,14 @@ export class CityManager {
         const x = (col * spacing) - (cols * spacing / 2);
         const z = (row * spacing) - (cols * spacing / 2);
         
-        // FsEntry has 'path', 'name', 'is_directory', 'is_file'
-        if (entry.is_directory) {
+        // HEURÍSTICA DE TIPO:
+        // 1. Se tem children (leitura recursiva), é dir.
+        // 2. Se não tem ponto no nome (ex: 'documents'), assumimos dir.
+        // 3. Se tem ponto (ex: 'image.png'), assumimos arquivo.
+        // Ajuste conforme necessário para o seu SO (Linux geralmente não exige extensão, mas é um padrão comum).
+        const isDir = entry.children !== undefined || !entry.name.includes('.');
+        
+        if (isDir) {
             this.createBuilding(entry, x, z);
         } else {
             this.createFileMonument(entry, x, z);
@@ -114,7 +120,7 @@ export class CityManager {
   }
 
   async createBuilding(entry, x, z) {
-    const name = entry.name.toLowerCase();
+    const name = entry.name ? entry.name.toLowerCase() : 'dir';
     let type = 'office';
     let height = 6 + Math.random() * 8;
     
@@ -156,7 +162,7 @@ export class CityManager {
   }
 
   async createFileMonument(entry, x, z) {
-    const name = entry.name;
+    const name = entry.name || 'file';
     const ext = name.split('.').pop().toLowerCase();
     
     let color = 0xcccccc;
@@ -241,8 +247,17 @@ export class CityManager {
     // EXIT DOOR (Behind start position, towards -Z)
     this.createPortal("..", 0, d/2 - 0.5, true); // Behind player's starting point
 
+    // SEPARATE FILES AND DIRS
+    const files = [];
+    const dirs = [];
+    
+    entries.forEach(e => {
+         const isDir = e.children !== undefined || !e.name.includes('.');
+         if(isDir) dirs.push(e);
+         else files.push(e);
+    });
+
     // FILES (Center Pedestals)
-    const files = entries.filter(e => e.is_file); 
     files.forEach((f, i) => {
         const angle = (i / files.length) * Math.PI * 2;
         const r = 4;
@@ -269,7 +284,6 @@ export class CityManager {
     });
 
     // ELEVATORS (Subdirectories) - On Side Walls
-    const dirs = entries.filter(e => e.is_directory);
     dirs.forEach((dItem, i) => {
         const isLeft = i % 2 === 0;
         const xPos = isLeft ? -w/2 + 0.5 : w/2 - 0.5;
