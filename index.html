@@ -381,30 +381,25 @@
     }
 
     // Global bridge for Universe.js to call
-    window.updateQualityUI = (settingsOrMode) => {
-      // Handle legacy string input or new object
-      let mode = 'custom';
-      if (typeof settingsOrMode === 'string') mode = settingsOrMode;
-      else mode = settingsOrMode.quality;
-
+    window.updateQualityUI = (settings) => {
       document.querySelectorAll('.quality-card').forEach(c => c.classList.remove('active'));
       document.body.classList.remove('retro', 'ultra');
       
-      if(mode === 'retro') {
+      if(settings.quality === 'retro') {
         document.getElementById('q-retro').classList.add('active');
         document.body.classList.add('retro');
-      } else if (mode === 'ultra') {
+      } else if (settings.quality === 'ultra') {
         document.getElementById('q-ultra').classList.add('active');
         document.body.classList.add('ultra');
+      } else { // 'custom' or other modes
+          // If custom, highlight nothing or indicate custom
       }
 
-      // Sync Checkboxes if object provided
-      if (typeof settingsOrMode === 'object') {
-          if(document.getElementById('gfx-shadows')) document.getElementById('gfx-shadows').checked = settingsOrMode.shadows;
-          if(document.getElementById('gfx-bloom')) document.getElementById('gfx-bloom').checked = settingsOrMode.bloom;
-          if(document.getElementById('gfx-antialias')) document.getElementById('gfx-antialias').checked = settingsOrMode.antialias;
-          if(document.getElementById('gfx-fog')) document.getElementById('gfx-fog').checked = settingsOrMode.fog;
-      }
+      // Sync Checkboxes
+      if(document.getElementById('gfx-shadows')) document.getElementById('gfx-shadows').checked = settings.shadows;
+      if(document.getElementById('gfx-bloom')) document.getElementById('gfx-bloom').checked = settings.bloom;
+      if(document.getElementById('gfx-antialias')) document.getElementById('gfx-antialias').checked = settings.antialias;
+      if(document.getElementById('gfx-fog')) document.getElementById('gfx-fog').checked = settings.fog;
     }
   </script>
 

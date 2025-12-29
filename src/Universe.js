@@ -17,11 +17,11 @@ export class Universe {
 
     // Configurações Globais
     this.settings = {
-        quality: 'custom',
-        shadows: true,
-        bloom: true,
-        antialias: true,
-        fog: true
+        quality: 'retro', // Start in retro mode
+        shadows: false,
+        bloom: false,
+        antialias: false,
+        fog: false
     };
 
     this.hasPlayer = hasPlayer;
