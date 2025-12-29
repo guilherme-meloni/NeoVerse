@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { open as shellOpen } from '@tauri-apps/api/shell';
 
 export class Universe {
   constructor(canvas, hasPlayer = false) {
@@ -616,7 +617,7 @@ export class Universe {
       }
     });
 
-    // Double Click to Load Texture
+    // Double Click to Load Texture OR Open File
     this.canvas.addEventListener('dblclick', (e) => {
         if (this.viewMode !== '3d') return;
 
@@ -628,7 +629,17 @@ export class Universe {
         const intersects = this.raycaster.intersectObjects(objects);
         
         if (intersects.length > 0) {
-            this.textureTargetObject = intersects[0].object;
+            const obj = intersects[0].object;
+
+            // Check if it is a FileSystem object
+            if (obj.userData.properties && obj.userData.properties.filePath) {
+                console.log(`📂 Opening: ${obj.userData.properties.filePath}`);
+                shellOpen(obj.userData.properties.filePath);
+                return;
+            }
+
+            // Default: Texture Load
+            this.textureTargetObject = obj;
             this.fileInput.click(); // Open system dialog
         }
     });

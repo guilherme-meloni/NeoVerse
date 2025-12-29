@@ -1,4 +1,7 @@
 import { emit, listen } from '@tauri-apps/api/event';
+import { open } from '@tauri-apps/api/dialog';
+import { readDir } from '@tauri-apps/api/fs';
+import { homeDir } from '@tauri-apps/api/path';
 
 export class ObjectManager {
   constructor(windowManager, universe, networkManager = null) {
@@ -498,6 +501,102 @@ export class ObjectManager {
 
   generateId() {
     return 'obj_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  }
+
+  async createFileSystemRoom() {
+    try {
+        const selected = await open({
+            directory: true,
+            multiple: false,
+            defaultPath: await homeDir()
+        });
+
+        if (selected && typeof selected === 'string') {
+            console.log('📂 Diretório selecionado:', selected);
+            this.generateRoomFromPath(selected);
+        }
+    } catch (e) {
+        console.error('Erro ao selecionar diretório:', e);
+        this.showTooltip('❌ Erro ao abrir diálogo');
+    }
+  }
+
+  async generateRoomFromPath(path) {
+    try {
+        const entries = await readDir(path);
+        
+        if (!entries || entries.length === 0) {
+            this.showTooltip('📂 Pasta vazia');
+            return;
+        }
+
+        // Layout Parameters
+        const spacing = 1.5;
+        const cols = Math.ceil(Math.sqrt(entries.length));
+        
+        // Define a "Room Center" offset relative to origin
+        // Spawning "FSN" cluster at x=10, z=10 to avoid 0,0 clash
+        const originX = 10;
+        const originZ = 10;
+
+        entries.forEach((entry, index) => {
+            // Grid Layout
+            const col = index % cols;
+            const row = Math.floor(index / cols);
+            
+            const x = originX + (col * spacing);
+            const z = originZ + (row * spacing);
+            
+            // Heuristic to detect folder (no perfect way without metadata call, 
+            // but we can assume no extension = folder or check children if recursive was true)
+            // For now, let's just make everything a box.
+            // If it has a dot, it might be a file.
+            const isFile = entry.name && entry.name.includes('.');
+            
+            const type = isFile ? 'cube' : 'cube'; // Keep it FSN style (all cubes?)
+            // Let's make folders GREEN and files BLUE
+            const color = isFile ? 0x00ccff : 0x00ff88;
+            
+            const id = this.generateId();
+            
+            const properties = {
+                color: color,
+                scale: 0.8,
+                isSolid: true,
+                filePath: entry.path,
+                fileName: entry.name,
+                isFileSystem: true
+            };
+            
+            const position = { x, y: 1, z };
+
+            this.universe.addObject(type, position, properties, id, false);
+            this.myObjects.add(id);
+            this.allObjects.set(id, {
+                id,
+                type,
+                position,
+                properties,
+                ownerId: this.windowManager.label
+            });
+            
+            // Also add text label? (Complex in vanilla Three.js without font loader)
+            // We'll skip text for now, maybe tooltip on hover later.
+        });
+        
+        // Move player nearby?
+        if (this.universe.hasPlayer && this.universe.player) {
+            this.universe.player.position.set(originX - 2, 2, originZ - 2);
+            this.universe.playerVelocity.set(0,0,0);
+        }
+
+        this.updateUI();
+        this.showTooltip(`📂 Sala criada: ${entries.length} itens!`);
+        
+    } catch (e) {
+        console.error('Erro ao ler diretório:', e);
+        this.showTooltip('❌ Erro ao ler arquivos');
+    }
   }
 
   cleanup() {

@@ -107,6 +107,10 @@ function setupUI() {
       });
   });
 
+  document.getElementById('btn-create-room').addEventListener('click', () => {
+      objectManager.createFileSystemRoom();
+  });
+
   document.getElementById('btn-view-mode').addEventListener('click', () => {
       universe.toggleViewMode();
   });
