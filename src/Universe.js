@@ -39,7 +39,7 @@ export class Universe {
     this.lastMouseX = 0;
     this.lastMouseY = 0;
 
-    // Controles FPS SIMPLIFICADOS (sem pointer lock que trava)
+    // Controles FPS
     this.keys = { w: false, a: false, s: false, d: false, shift: false, space: false };
     this.fpsYaw = 0;
     this.fpsPitch = 0;
@@ -47,9 +47,8 @@ export class Universe {
     this.jumpPower = 0.3;
     this.isGrounded = false;
     
-    // Mouse tracking para FPS leve
-    this.lastFPSMouseX = window.innerWidth / 2;
-    this.lastFPSMouseY = window.innerHeight / 2;
+    // Bind para evento de pointer lock
+    this.onPointerLockChange = this.onPointerLockChange.bind(this);
 
     // Throttle para animação
     this.lastFrameTime = 0;
@@ -112,6 +111,7 @@ export class Universe {
 
     // Controles
     this.setupControls();
+    document.addEventListener('pointerlockchange', this.onPointerLockChange);
     window.addEventListener('resize', () => this.onResize());
 
     // Inicia animação
@@ -179,7 +179,7 @@ export class Universe {
     this.viewMode = this.viewMode === '3d' ? 'fps' : '3d';
 
     if (this.viewMode === 'fps') {
-      // MODO FPS - SEM POINTER LOCK (causa travamento)
+      // MODO FPS
       this.fpsYaw = Math.PI;
       this.fpsPitch = 0;
 
@@ -204,15 +204,14 @@ export class Universe {
         }
       });
 
-      this.canvas.style.cursor = 'none';
+      // Solicita Pointer Lock real
+      this.canvas.requestPointerLock();
       
-      // Reseta posição do mouse
-      this.lastFPSMouseX = window.innerWidth / 2;
-      this.lastFPSMouseY = window.innerHeight / 2;
-
       console.log('👁️ Modo FPS ativado (LOW PERFORMANCE)');
     } else {
       // Volta pra 3D
+      document.exitPointerLock();
+      
       this.canvas.style.cursor = 'default';
       this.renderer.setPixelRatio(1);
       this.scene.fog.density = 0.02;
@@ -231,6 +230,19 @@ export class Universe {
     // Mostra/esconde player
     if (this.player) {
       this.player.visible = this.viewMode === '3d';
+    }
+  }
+
+  onPointerLockChange() {
+    if (document.pointerLockElement === this.canvas) {
+      // Travado com sucesso, nada a fazer
+    } else {
+      // Destravado (ex: usuário apertou ESC)
+      // Se ainda achamos que estamos em FPS, devemos sair
+      if (this.viewMode === 'fps') {
+        this.toggleViewMode();
+        this.updateViewUI();
+      }
     }
   }
 
@@ -268,29 +280,19 @@ export class Universe {
       if (key === ' ') this.keys.space = false;
     });
 
-    // Mouse move - COM RECENTRALIZAÇÃO
+    // Mouse move
     document.addEventListener('mousemove', (e) => {
-      // Modo FPS - movimento com auto-recentralização
+      // Modo FPS - movimento com Pointer Lock nativo
       if (this.viewMode === 'fps') {
-        const centerX = window.innerWidth / 2;
-        const centerY = window.innerHeight / 2;
-        
-        const deltaX = e.clientX - centerX;
-        const deltaY = e.clientY - centerY;
-        
-        // Aplica rotação baseado na distância do centro
-        this.fpsYaw -= deltaX * 0.003;
-        this.fpsPitch -= deltaY * 0.003;
-        this.fpsPitch = Math.max(-1.5, Math.min(1.5, this.fpsPitch));
-        
-        // RECENTRALIZA quando sai muito do centro (evita sair da tela)
-        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-        if (distance > 100) {
-          // Força recentralização movendo cursor (se navegador permitir)
-          this.lastFPSMouseX = centerX;
-          this.lastFPSMouseY = centerY;
+        if (document.pointerLockElement === this.canvas) {
+            // Sensibilidade ajustada (0.002 é um valor comum para movementX/Y)
+            const sensitivity = 0.002;
+            this.fpsYaw -= e.movementX * sensitivity;
+            this.fpsPitch -= e.movementY * sensitivity;
+            
+            // Limita o pitch para não dar volta completa vertical (gimbal lock prevention)
+            this.fpsPitch = Math.max(-1.5, Math.min(1.5, this.fpsPitch));
         }
-        
         return;
       }
 
@@ -338,7 +340,14 @@ export class Universe {
 
     // Mouse down
     this.canvas.addEventListener('mousedown', (e) => {
-      if (this.viewMode === 'fps') return;
+      // Se estiver em FPS mas perdeu o lock (ex: alt-tab), tenta recuperar ao clicar
+      if (this.viewMode === 'fps') {
+        if (document.pointerLockElement !== this.canvas) {
+            this.canvas.requestPointerLock();
+        }
+        return;
+      }
+      
       if (e.button !== 0) return;
 
       this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -830,6 +839,8 @@ export class Universe {
   }
 
   cleanup() {
+    document.removeEventListener('pointerlockchange', this.onPointerLockChange);
+
     if (this.animationId) {
       cancelAnimationFrame(this.animationId);
     }
