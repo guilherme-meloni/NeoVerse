@@ -532,14 +532,23 @@ export class ObjectManager {
             return;
         }
 
+        // PROTEÇÃO: Limitar número de itens
+        const MAX_ITEMS = 150;
+        let renderEntries = entries;
+        if (entries.length > MAX_ITEMS) {
+            console.warn(`⚠️ Sala muito grande! Limitando a ${MAX_ITEMS} itens.`);
+            this.showTooltip(`⚠️ Exibindo apenas ${MAX_ITEMS} de ${entries.length} itens`);
+            renderEntries = entries.slice(0, MAX_ITEMS);
+        }
+
         // Layout Parameters
         const spacing = 2.0; // Increased spacing for folders
-        const cols = Math.ceil(Math.sqrt(entries.length));
+        const cols = Math.ceil(Math.sqrt(renderEntries.length));
         
         const originX = 10;
         const originZ = 10;
 
-        entries.forEach((entry, index) => {
+        renderEntries.forEach((entry, index) => {
             // Grid Layout
             const col = index % cols;
             const row = Math.floor(index / cols);

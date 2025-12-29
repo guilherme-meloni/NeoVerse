@@ -58,12 +58,20 @@ export class CityManager {
   }
 
   buildCityBlock(entries) {
+    // PROTEÇÃO CONTRA CRASH: Limitar número de itens renderizados
+    const MAX_ITEMS = 150;
+    let renderEntries = entries;
+    if (entries.length > MAX_ITEMS) {
+        console.warn(`⚠️ Diretório muito grande! Renderizando apenas os primeiros ${MAX_ITEMS} itens de ${entries.length}.`);
+        renderEntries = entries.slice(0, MAX_ITEMS);
+    }
+
     // Layout Grid
     const streetWidth = 4;
     const buildingSize = 5;
     const spacing = buildingSize + streetWidth;
     
-    const cols = Math.ceil(Math.sqrt(entries.length));
+    const cols = Math.ceil(Math.sqrt(renderEntries.length));
     
     // Chão da Cidade (Grade Infinita Visual)
     const floorGeo = new THREE.PlaneGeometry(200, 200);
@@ -84,7 +92,7 @@ export class CityManager {
     this.universe.scene.add(gridHelper);
 
     // Gerar Prédios
-    entries.forEach((entry, index) => {
+    renderEntries.forEach((entry, index) => {
         const col = index % cols;
         const row = Math.floor(index / cols);
         
