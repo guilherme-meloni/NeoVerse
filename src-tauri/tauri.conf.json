@@ -24,8 +24,8 @@
         "open": true
       },
       "shell": {
-        "all": true,
-        "open": true
+        "all": false,
+        "open": "^.*$"
       },
       "path": {
         "all": true

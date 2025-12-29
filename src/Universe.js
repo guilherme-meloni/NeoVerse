@@ -338,53 +338,55 @@ export class Universe {
     const segs = 12; 
     
     if (type === 'folder') {
-        // Create a custom Shape for the folder icon
-        const shape = new THREE.Shape();
-        const w = 1.0;
-        const h = 0.7;
-        const tabW = 0.4;
-        const tabH = 0.15;
+        mesh = new THREE.Group();
         
-        // Start bottom left
-        shape.moveTo(-w/2, -h/2);
-        // Bottom right
-        shape.lineTo(w/2, -h/2);
-        // Top right (below tab level)
-        shape.lineTo(w/2, h/2 - tabH);
-        // Tab start (right side of tab)
-        shape.lineTo(-w/2 + tabW, h/2 - tabH);
-        // Tab top right
-        shape.lineTo(-w/2 + tabW - 0.05, h/2);
-        // Tab top left
-        shape.lineTo(-w/2 + 0.05, h/2);
-        // Top left (side)
-        shape.lineTo(-w/2, h/2 - 0.1);
-        // Close
-        shape.lineTo(-w/2, -h/2);
-
-        const extrudeSettings = {
-            steps: 1,
-            depth: 0.2, // Thickness
-            bevelEnabled: true,
-            bevelThickness: 0.05,
-            bevelSize: 0.05,
-            bevelSegments: 2
-        };
-
-        const geom = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-        // Center the geometry
-        geom.center();
+        // Folder Back (Main Color)
+        const backGeom = new THREE.BoxGeometry(1.2, 0.9, 0.1);
+        const backMat = this.getMaterial(properties.color);
+        const back = new THREE.Mesh(backGeom, backMat);
+        back.userData = { parentId: id }; // Link to parent
         
-        mesh = new THREE.Mesh(geom, this.getMaterial(properties.color));
+        // Folder Tab (Top Left)
+        const tabGeom = new THREE.BoxGeometry(0.4, 0.2, 0.1);
+        const tab = new THREE.Mesh(tabGeom, backMat.clone());
+        tab.position.set(-0.4, 0.55, 0);
+        tab.userData = { parentId: id };
+        
+        // Paper inside (White)
+        const paperGeom = new THREE.BoxGeometry(1.0, 0.8, 0.05);
+        const paperMat = this.getMaterial(0xffffff);
+        const paper = new THREE.Mesh(paperGeom, paperMat);
+        paper.position.set(0, 0.05, 0.05); // Slightly forward
+        paper.userData = { parentId: id };
+        
+        // Front Cover (Main Color, slightly open)
+        const frontGeom = new THREE.BoxGeometry(1.2, 0.5, 0.05);
+        const front = new THREE.Mesh(frontGeom, backMat.clone());
+        front.position.set(0, -0.2, 0.1);
+        front.rotation.x = 0.1; // Tilt
+        front.userData = { parentId: id };
+
+        mesh.add(back);
+        mesh.add(tab);
+        mesh.add(paper);
+        mesh.add(front);
+        
         mesh.scale.setScalar(properties.scale || 1);
         
     } else if (type === 'file') {
-        // "Data Canister" / Cylinder style (Clean, tech-looking)
-        // Or if user meant "Paperclip", a Torus is closest simple primitive, but Cylinder is safer for "File"
-        const radius = 0.3 * (properties.scale || 1);
-        const height = 1.0 * (properties.scale || 1);
-        const geom = new THREE.CylinderGeometry(radius, radius, height, 16);
+        // Thin box (File Card)
+        const geom = new THREE.BoxGeometry(0.8, 1.1, 0.05);
         mesh = new THREE.Mesh(geom, this.getMaterial(properties.color));
+        // Add a small header bar for detail
+        const headGeom = new THREE.BoxGeometry(0.8, 0.2, 0.06);
+        const headMat = this.getMaterial(0xffffff); // Contrast
+        const head = new THREE.Mesh(headGeom, headMat);
+        head.position.y = 0.45;
+        head.userData = { parentId: id };
+        
+        // If it's a mesh, we can just return it, but let's make it a group for consistency if we add details
+        // Actually for now, just the mesh + child detail
+        mesh.add(head);
         
     } else {
         // Primitives
@@ -403,14 +405,23 @@ export class Universe {
     mesh.userData = { id, type, properties, isGhost, isSolid: true };
     
     if (isGhost) { 
-        mesh.material.transparent = true; 
-        mesh.material.opacity = 0.5; 
+        if (mesh.isGroup) {
+            mesh.children.forEach(c => {
+                c.material.transparent = true;
+                c.material.opacity = 0.5;
+            });
+        } else {
+            mesh.material.transparent = true; 
+            mesh.material.opacity = 0.5; 
+        }
     }
     
     this.scene.add(mesh);
     this.objects.set(id, mesh);
     return mesh;
   }
+
+  // ... (dblclick listener update below)
 
   removeObject(id) {
     const obj = this.objects.get(id);
@@ -700,26 +711,28 @@ export class Universe {
         
         // Raycast against all objects
         const objectValues = Array.from(this.objects.values());
-        const intersects = this.raycaster.intersectObjects(objectValues, true); // Recursive just in case
+        const intersects = this.raycaster.intersectObjects(objectValues, true); // Recursive
         
         if (intersects.length > 0) {
             let hit = intersects[0].object;
 
-            // Bubble up to find main object with ID
-            while (hit.parent && !hit.userData.id) {
-                hit = hit.parent;
+            // Find the robust parent container
+            // We search up until we find the object that we actually created (which has the ID)
+            let rootObj = hit;
+            while (rootObj && !rootObj.userData.id) {
+                rootObj = rootObj.parent;
             }
 
-            // Check if it is a FileSystem object
-            if (hit.userData.properties && hit.userData.properties.filePath) {
-                console.log(`📂 Opening path: "${hit.userData.properties.filePath}"`);
-                try {
-                    shellOpen(hit.userData.properties.filePath)
-                        .then(() => console.log('✅ Shell open command sent'))
-                        .catch(err => console.error('❌ Shell open failed:', err));
-                } catch (err) {
-                    console.error('❌ Shell open exception:', err);
-                }
+            // If we hit something that isn't part of our managed objects, ignore
+            if (!rootObj || !rootObj.userData.id) return;
+
+            // Check for FileSystem path
+            const props = rootObj.userData.properties;
+            if (props && props.filePath) {
+                console.log(`📂 Opening path: "${props.filePath}"`);
+                shellOpen(props.filePath)
+                    .then(() => console.log('✅ Command sent'))
+                    .catch(e => console.error('❌ Command failed:', e));
                 return;
             }
 

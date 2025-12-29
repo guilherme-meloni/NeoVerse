@@ -245,6 +245,13 @@
         <label class="control-label">Ações</label>
         <button class="ui-btn" style="border-color:#ff4444; color:#ff4444" id="btn-delete">🗑️ Remover Seleção</button>
       </div>
+      
+      <div class="control-group">
+        <label class="control-label">Lista</label>
+        <div id="objects-container" style="max-height: 200px; overflow-y: auto; font-size: 10px;">
+           <!-- JS Populated -->
+        </div>
+      </div>
     </div>
 
     <!-- TAB: WORLD -->
@@ -309,9 +316,13 @@
     <div id="hud-overlay" style="position: absolute; top: 10px; left: 10px; color: #00ff00; font-family: monospace; pointer-events: none; user-select: none;">
         <div>MODE: <span id="hud-mode">3D ORBITAL</span></div>
         <div style="font-size: 12px; margin-top: 5px;">
-            Janelas: <span id="window-count">1</span> | 
+            Janela #<span id="window-id">1</span> | 
             Objetos: <span id="object-count">0</span> | 
             Overlaps: <span id="overlap-count">0</span>
+        </div>
+        <div style="font-size: 12px; margin-top: 5px; display: flex; align-items: center; gap: 5px;">
+            <div id="status-dot" class="status-dot dot-active" style="width: 8px; height: 8px; border-radius: 50%; background: #0f0;"></div>
+            <span id="status-text">Ativo</span>
         </div>
         <div style="font-size: 10px; color: #aaa; margin-top: 5px;">Render: <span id="debug-fps">--</span> FPS</div>
     </div>
