@@ -133,11 +133,15 @@ export class WindowManager {
 
   updateUI() {
     // Contador de janelas
-    document.getElementById('window-count').textContent = this.windows.size;
+    const countEl = document.getElementById('window-count');
+    if(countEl) countEl.textContent = this.windows.size;
     
     // Número da janela
-    const windowNumber = Array.from(this.windows.keys()).indexOf(this.label) + 1;
-    document.getElementById('window-id').textContent = windowNumber;
+    const idEl = document.getElementById('window-id');
+    if(idEl) {
+        const windowNumber = Array.from(this.windows.keys()).indexOf(this.label) + 1;
+        idEl.textContent = windowNumber;
+    }
   }
 
   getOverlappingWindows() {

@@ -56,7 +56,7 @@ export class Universe {
     this.lastMouseY = 0;
 
     // Controles FPS
-    this.keys = { w: false, a: false, s: false, d: false, shift: false, space: false };
+    this.keys = { w: false, a: false, s: false, d: false, shift: false, space: false, e: false, enter: false };
     this.joystick = { active: false, dx: 0, dy: 0, originX: 0, originY: 0 }; // Mobile Joystick
     this.fpsYaw = Math.PI;
     this.fpsPitch = 0;
