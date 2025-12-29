@@ -170,11 +170,26 @@ export class ObjectManager {
     this.updateUI();
   }
 
-  async addObject(type) {
+  // Limpa apenas objetos gerados pela cidade/diretório
+  async removeAllCityObjects() {
+      const toRemove = [];
+      this.allObjects.forEach((obj, id) => {
+          if (obj.isCityObject && obj.ownerId === this.windowManager.label) {
+              toRemove.push(id);
+          }
+      });
+
+      for (const id of toRemove) {
+          await this.removeObject(id);
+      }
+      console.log(`🧹 Cidade limpa: ${toRemove.length} objetos removidos.`);
+  }
+
+  async addObject(type, position = null, customProps = null, isCity = false) {
     const id = this.generateId();
 
-    // Posição aleatória
-    const position = {
+    // Posição aleatória se não informada
+    const pos = position || {
       x: (Math.random() - 0.5) * 8,
       y: 1 + Math.random() * 2,
       z: (Math.random() - 0.5) * 8
@@ -182,25 +197,27 @@ export class ObjectManager {
 
     // Cor aleatória
     const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xff00ff, 0x00ffff, 0xffff00, 0xff6600, 0xff0088];
-    const color = colors[Math.floor(Math.random() * colors.length)];
+    const color = (customProps && customProps.color) ? customProps.color : colors[Math.floor(Math.random() * colors.length)];
 
     const properties = {
       color: color,
-      scale: 0.5 + Math.random() * 1,
-      isSolid: true // Sólido por padrão
+      scale: (customProps && customProps.scale) ? customProps.scale : (0.5 + Math.random() * 1),
+      isSolid: true,
+      ...customProps // Merge extra props (like building height, type, label)
     };
 
     const objData = {
       id,
       type,
-      position,
+      position: pos,
       properties,
       ownerId: this.windowManager.label,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      isCityObject: isCity // Flag para identificar objetos da cidade
     };
 
     // Adiciona localmente
-    this.universe.addObject(type, position, properties, id, false);
+    this.universe.addObject(type, pos, properties, id, false);
     this.myObjects.add(id);
     this.allObjects.set(id, objData);
 
@@ -212,10 +229,12 @@ export class ObjectManager {
       this.networkManager.broadcastObjectAdd(objData);
     }
 
-    this.updateUI();
-    this.showTooltip(`${this.getEmoji(type)} ${type} adicionado!`);
+    if (!isCity) {
+        this.updateUI();
+        this.showTooltip(`${this.getEmoji(type)} ${type} adicionado!`);
+    }
 
-    console.log(`✨ Objeto ${type} criado:`, id);
+    // console.log(`✨ Objeto ${type} criado:`, id);
     return id;
   }
 

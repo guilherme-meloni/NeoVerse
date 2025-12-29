@@ -3,11 +3,12 @@ import { readDir } from '@tauri-apps/api/fs';
 import { open } from '@tauri-apps/api/shell';
 
 export class CityManager {
-  constructor(universe, windowManager) {
+  constructor(universe, windowManager, objectManager) {
     this.universe = universe;
     this.windowManager = windowManager;
+    this.objectManager = objectManager;
     this.currentPath = null;
-    this.doors = []; // Lista de portas para verificar colisão
+    this.doors = []; // Lista de IDs para verificar colisão
     this.isCityActive = false;
     
     // Configurações de Design
@@ -32,10 +33,10 @@ export class CityManager {
     this.currentPath = path;
     this.doors = []; // Limpa portas antigas
     
-    // 1. Limpar Universo
-    this.universe.clearScene();
+    // 1. Limpar Objetos da Cidade Anterior
+    await this.objectManager.removeAllCityObjects();
     
-    // 2. Configurar Ambiente Cyberpunk
+    // 2. Configurar Ambiente Cyberpunk (Visual Global)
     this.universe.setCyberpunkAtmosphere();
 
     // 3. Ler Arquivos
@@ -47,7 +48,6 @@ export class CityManager {
       if(this.universe.player) {
         this.universe.player.position.set(0, 2, 0);
         this.universe.playerVelocity.set(0,0,0);
-        // Resetar rotação da câmera
         this.universe.fpsYaw = Math.PI; 
         this.universe.fpsPitch = 0;
       }
@@ -58,11 +58,11 @@ export class CityManager {
   }
 
   buildCityBlock(entries) {
-    // PROTEÇÃO CONTRA CRASH: Limitar número de itens renderizados
+    // PROTEÇÃO CONTRA CRASH
     const MAX_ITEMS = 150;
     let renderEntries = entries;
     if (entries.length > MAX_ITEMS) {
-        console.warn(`⚠️ Diretório muito grande! Renderizando apenas os primeiros ${MAX_ITEMS} itens de ${entries.length}.`);
+        console.warn(`⚠️ Diretório muito grande! Limitando a ${MAX_ITEMS}.`);
         renderEntries = entries.slice(0, MAX_ITEMS);
     }
 
@@ -73,35 +73,21 @@ export class CityManager {
     
     const cols = Math.ceil(Math.sqrt(renderEntries.length));
     
-    // Chão da Cidade (Grade Infinita Visual)
-    const floorGeo = new THREE.PlaneGeometry(200, 200);
-    const floorMat = new THREE.MeshStandardMaterial({ 
-        color: 0x050510, 
-        roughness: 0.1, 
-        metalness: 0.8,
-        emissive: 0x000022,
-        emissiveIntensity: 0.2
-    });
-    const floor = new THREE.Mesh(floorGeo, floorMat);
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.y = -0.05; // Avoid Z-fighting with Universe grid
-    this.universe.scene.add(floor);
+    // Chão da Cidade (Objeto Especial)
+    // Vamos adicionar o chão como um objeto "city_floor" para ele também sincronizar?
+    // Por enquanto deixamos local no Universe, mas idealmente seria sync também.
+    // Para simplificar, o chão fica local no Universe.js ou adicionamos aqui como 'plane'
+    // Vamos deixar o Universe lidar com o chão infinito global, e aqui só os prédios.
 
-    // GRADE DE NEON (Para noção de espaço)
-    const gridHelper = new THREE.GridHelper(200, 50, this.colors.neonBlue, 0x111122);
-    gridHelper.position.y = 0.1; // Pouco acima do chão
-    this.universe.scene.add(gridHelper);
-
-    // Gerar Prédios
+    // Gerar Prédios via ObjectManager
     renderEntries.forEach((entry, index) => {
         const col = index % cols;
         const row = Math.floor(index / cols);
         
         const x = (col * spacing) - (cols * spacing / 2);
-        const z = (row * spacing) - (cols * spacing / 2); // Centralizar
+        const z = (row * spacing) - (cols * spacing / 2);
         
-        // Determinar Arquétipo
-        const isDir = !entry.name.includes('.'); // Heurística simples
+        const isDir = !entry.name.includes('.'); 
         
         if (isDir) {
             this.createBuilding(entry, x, z);
@@ -110,16 +96,14 @@ export class CityManager {
         }
     });
 
-    // Criar "Portal de Saída" (Voltar diretório) se não for raiz
-    // Simplificação: Portal sempre atrás do player
+    // Portal de Saída (Voltar)
     this.createPortal("..", 0, 10, true);
   }
 
-  createBuilding(entry, x, z) {
+  async createBuilding(entry, x, z) {
     const name = entry.name.toLowerCase();
     let type = 'office';
     let height = 6 + Math.random() * 8;
-    let color = this.colors.neonBlue;
     
     // Lógica de Arquétipos
     if (name === 'node_modules' || name.includes('hidden')) {
@@ -132,215 +116,89 @@ export class CityManager {
         type = 'gallery';
     }
 
-    const group = new THREE.Group();
-    group.position.set(x, 0, z);
+    // Cria via ObjectManager para sincronizar!
+    const id = await this.objectManager.addObject('building', 
+        { x, y: 0, z }, // Pos
+        { 
+            buildingType: type,
+            height: height,
+            label: entry.name,
+            color: this.colors.neonBlue, // Base color fallback
+            isDir: true
+        },
+        true // isCity = true
+    );
 
-    let mesh;
-
-    // --- CONSTRUÇÃO DO PRÉDIO ---
-    if (type === 'factory') {
-        // Fábrica: Larga, cinza, baixa
-        height = 5;
-        const geo = new THREE.CylinderGeometry(3, 4, height, 32);
-        const mat = new THREE.MeshStandardMaterial({ color: this.colors.factory, roughness: 0.9 });
-        mesh = new THREE.Mesh(geo, mat);
-        mesh.position.y = height / 2;
-        
-        // Chaminés
-        const chimGeo = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
-        const chim = new THREE.Mesh(chimGeo, mat);
-        chim.position.set(1.5, height, 0);
-        group.add(chim);
-
-    } else if (type === 'blackhole') {
-        // Buraco Negro: Cubo denso, flutuando
-        const geo = new THREE.BoxGeometry(4, 4, 4);
-        const mat = new THREE.MeshBasicMaterial({ color: 0x000000, wireframe: true });
-        mesh = new THREE.Mesh(geo, mat);
-        mesh.position.y = 4;
-        
-        // Partículas orbitando (simples)
-        const ringGeo = new THREE.TorusGeometry(3, 0.1, 16, 32);
-        const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0xff0000 }));
-        ring.rotation.x = Math.PI / 2;
-        mesh.add(ring);
-
-    } else if (type === 'matrix') {
-        // Matrix: Alto, preto, neon verde
-        height = 15 + Math.random() * 10;
-        const geo = new THREE.BoxGeometry(3, height, 3);
-        const mat = new THREE.MeshStandardMaterial({ 
-            color: 0x001100, 
-            emissive: 0x00ff00, 
-            emissiveIntensity: 0.2,
-            wireframe: false 
-        });
-        mesh = new THREE.Mesh(geo, mat);
-        mesh.position.y = height / 2;
-
-        // Wireframe overlay
-        const wireGeo = new THREE.EdgesGeometry(geo);
-        const wireMat = new THREE.LineBasicMaterial({ color: 0x00ff00 });
-        const wire = new THREE.LineSegments(wireGeo, wireMat);
-        mesh.add(wire);
-
-    } else if (type === 'gallery') {
-        // Galeria: Vidro ciano
-        height = 8;
-        const geo = new THREE.BoxGeometry(4, height, 4);
-        const mat = new THREE.MeshPhysicalMaterial({ 
-            color: this.colors.glass, 
-            transmission: 0.5, 
-            opacity: 0.8, 
-            transparent: true,
-            roughness: 0 
-        });
-        mesh = new THREE.Mesh(geo, mat);
-        mesh.position.y = height / 2;
-
-    } else {
-        // Office Genérico
-        const geo = new THREE.BoxGeometry(3, height, 3);
-        const mat = new THREE.MeshStandardMaterial({ color: 0x222244, roughness: 0.2 });
-        mesh = new THREE.Mesh(geo, mat);
-        mesh.position.y = height / 2;
-        
-        // Janelas (simples textura procedural via canvas seria melhor, mas vamos de emissive random)
-        if (Math.random() > 0.5) {
-            mat.emissive = new THREE.Color(0x000044);
-            mat.emissiveIntensity = 0.5;
-        }
-    }
-
-    group.add(mesh);
-
-    // --- PORTA / PORTAL ---
-    // Área de colisão para entrar
-    const doorGeo = new THREE.PlaneGeometry(1.5, 2.5);
-    const doorMat = new THREE.MeshBasicMaterial({ color: this.colors.neonGreen, side: THREE.DoubleSide });
-    const door = new THREE.Mesh(doorGeo, doorMat);
-    door.position.set(0, 1.25, 2); // Na frente do prédio (assumindo box size ~3 ou 4)
-    if (type === 'factory') door.position.z = 3.5; // Ajuste para cilindro
-
-    // Texto flutuante (Nome da pasta)
-    // Three.js puro é ruim com texto, vamos usar CanvasTexture
-    const label = this.createLabel(entry.name);
-    label.position.set(0, height + 1, 0);
-    group.add(label);
-
-    group.add(door);
-    
-    // Adicionar à cena e à lista de portas
-    this.universe.scene.add(group);
-    
-    // Registrar Porta para Colisão
+    // Registrar Porta
     this.doors.push({
-        mesh: door,
+        id: id,
         path: entry.path,
         isBack: false,
-        worldPos: new THREE.Vector3().addVectors(group.position, door.position)
+        worldPos: new THREE.Vector3(x, 0, z) // Aproximação, o update pegará a real
     });
   }
 
-  createFileMonument(entry, x, z) {
-    // Arquivos são monumentos menores flutuando
-    const group = new THREE.Group();
-    group.position.set(x, 1, z);
-
-    // Cor baseada na extensão
-    let color = 0xcccccc;
+  async createFileMonument(entry, x, z) {
     const name = entry.name;
     const ext = name.split('.').pop().toLowerCase();
-
+    
+    let color = 0xcccccc;
     if (['png', 'jpg', 'jpeg'].includes(ext)) color = this.colors.neonPink;
     else if (['js', 'json', 'rs', 'py'].includes(ext)) color = this.colors.neonBlue;
     else if (['exe', 'sh'].includes(ext)) color = 0xff0000;
 
-    // Geometria
-    const geo = new THREE.OctahedronGeometry(0.8);
-    const mat = new THREE.MeshStandardMaterial({ 
-        color: color, 
-        emissive: color, 
-        emissiveIntensity: 0.5,
-        wireframe: true 
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    
-    // Animação de rotação (userData para o loop de animação pegar depois se quisesse)
-    // Por enquanto estático para performance
-    
-    group.add(mesh);
+    const id = await this.objectManager.addObject('monument', 
+        { x, y: 1, z },
+        {
+            color: color,
+            label: name,
+            isFile: true
+        },
+        true
+    );
 
-    // Label
-    const label = this.createLabel(name, 0.5);
-    label.position.y = 1.5;
-    group.add(label);
-
-    // Colisão para ABRIR arquivo
     this.doors.push({
-        mesh: mesh,
+        id: id,
         path: entry.path,
         isFile: true,
-        worldPos: group.position
+        worldPos: new THREE.Vector3(x, 1, z)
     });
-
-    this.universe.scene.add(group);
   }
 
-  createPortal(name, x, z, isBack) {
-    const geo = new THREE.TorusGeometry(1.5, 0.1, 8, 16);
-    const mat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
-    const portal = new THREE.Mesh(geo, mat);
-    portal.position.set(x, 1.5, z);
-    
-    const label = this.createLabel(isBack ? "VOLTAR (..)" : name);
-    label.position.set(x, 3.5, z);
-    
-    this.universe.scene.add(portal);
-    this.universe.scene.add(label);
+  async createPortal(name, x, z, isBack) {
+    const id = await this.objectManager.addObject('portal',
+        { x, y: 1.5, z },
+        { label: isBack ? "VOLTAR (..)" : name },
+        true
+    );
 
     this.doors.push({
-        mesh: portal,
+        id: id,
         isBack: true,
-        worldPos: portal.position
+        worldPos: new THREE.Vector3(x, 1.5, z)
     });
   }
 
-  createLabel(text, scale=1) {
-    const canvas = document.createElement('canvas');
-    canvas.width = 512; // Dobro da resolução
-    canvas.height = 128;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = 'rgba(0,0,0,0.6)'; // Fundo um pouco mais escuro
-    ctx.fillRect(0,0,512,128);
-    ctx.font = 'bold 50px monospace'; // Fonte maior
-    ctx.fillStyle = '#00ffff'; // Neon Cyan
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text.substring(0, 20), 256, 64);
-    
-    const tex = new THREE.CanvasTexture(canvas);
-    const mat = new THREE.SpriteMaterial({ map: tex });
-    const sprite = new THREE.Sprite(mat);
-    sprite.scale.set(4 * scale, 1 * scale, 1);
-    return sprite;
-  }
-
-  // Loop de verificação chamado pelo Universe.js
+  // Loop de verificação
   update(playerPos) {
     if (!this.isCityActive) return;
 
     // Verificar distância das portas
     for (const door of this.doors) {
-        // Distância simples 2D (XZ) para facilitar entrada
+        // Obter posição real do objeto (caso tenha movido ou seja ghost)
+        // Mas prédios são estáticos, então worldPos inicial serve para performance
+        // A menos que queiramos janelas móveis levando a cidade junto (complexo)
+        
+        // Se a janela se moveu, a "cidade" se moveu junto visualmente
+        // POREM, playerPos é relativo à janela local?
+        // Sim, player é local.
+        
         const dx = playerPos.x - door.worldPos.x;
         const dz = playerPos.z - door.worldPos.z;
         const dist = Math.sqrt(dx*dx + dz*dz);
 
         if (dist < 1.5) {
-            // Entrou!
             if (door.isFile) {
-                // Abrir arquivo (debounce simples)
                 if(!this.openingFile) {
                     this.openingFile = true;
                     console.log("📄 Abrindo arquivo:", door.path);
@@ -348,22 +206,13 @@ export class CityManager {
                     setTimeout(() => this.openingFile = false, 2000);
                 }
             } else if (door.isBack) {
-                // Voltar diretório
-                // Lógica simples: subir um nível na string path
-                // (Isso requer lidar com path separator dependendo do OS, assumindo / ou \)
-                // Como tauri path API é assincrona, vamos tentar heuristica de string por enquanto ou pedir pro pai
-                // TODO: Implementar lógica robusta de 'parent dir'
                 console.log("🔙 Voltando...");
-                // Hack: Recarregar home ou anterior (precisaria de pilha de histórico)
-                // Por hora, reseta
-                // this.startCity(homeDir...); 
-                alert("Voltar ainda não implementado totalmente!");
+                // Implementar lógica de voltar real
             } else {
-                // Entrar na pasta
                 console.log("🚪 Entrando em:", door.path);
                 this.enterDirectory(door.path);
             }
-            break; // Evitar múltiplas entradas num frame
+            break; 
         }
     }
   }

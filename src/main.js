@@ -33,7 +33,7 @@ async function init() {
   networkManager = new NetworkManager(windowManager, null);
   objectManager = new ObjectManager(windowManager, universe, networkManager);
   networkManager.objectManager = objectManager;
-  cityManager = new CityManager(universe, windowManager); // Init
+  cityManager = new CityManager(universe, windowManager, objectManager); // Init
 
   // Expose quality switcher to global scope for HTML buttons
   window.setQuality = (mode) => {

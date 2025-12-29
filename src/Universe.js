@@ -403,31 +403,27 @@ export class Universe {
     
     if (type === 'folder') {
         mesh = new THREE.Group();
-        
-        // Folder Back (Main Color)
+        // ... (Folder geometry code remains the same)
         const backGeom = new THREE.BoxGeometry(1.2, 0.9, 0.1);
         const backMat = this.getMaterial(properties.color);
         const back = new THREE.Mesh(backGeom, backMat);
         back.userData = { parentId: id }; // Link to parent
         
-        // Folder Tab (Top Left)
         const tabGeom = new THREE.BoxGeometry(0.4, 0.2, 0.1);
         const tab = new THREE.Mesh(tabGeom, backMat.clone());
         tab.position.set(-0.4, 0.55, 0);
         tab.userData = { parentId: id };
         
-        // Paper inside (White)
         const paperGeom = new THREE.BoxGeometry(1.0, 0.8, 0.05);
         const paperMat = this.getMaterial(0xffffff);
         const paper = new THREE.Mesh(paperGeom, paperMat);
-        paper.position.set(0, 0.05, 0.05); // Slightly forward
+        paper.position.set(0, 0.05, 0.05);
         paper.userData = { parentId: id };
         
-        // Front Cover (Main Color, slightly open)
         const frontGeom = new THREE.BoxGeometry(1.2, 0.5, 0.05);
         const front = new THREE.Mesh(frontGeom, backMat.clone());
         front.position.set(0, -0.2, 0.1);
-        front.rotation.x = 0.1; // Tilt
+        front.rotation.x = 0.1; 
         front.userData = { parentId: id };
 
         mesh.add(back);
@@ -436,7 +432,125 @@ export class Universe {
         mesh.add(front);
         
         mesh.scale.setScalar(properties.scale || 1);
+
+    } else if (type === 'building') {
+        // --- CITY BUILDING RENDERER ---
+        mesh = new THREE.Group();
+        const bType = properties.buildingType || 'office';
+        const height = properties.height || 6;
+        const color = properties.color || 0x00ffff;
         
+        let buildingMesh;
+
+        if (bType === 'factory') {
+            // Fábrica
+            const geo = new THREE.CylinderGeometry(3, 4, height, 32);
+            const mat = this.getMaterial(0x555555); // Factory Gray
+            buildingMesh = new THREE.Mesh(geo, mat);
+            buildingMesh.position.y = height / 2;
+            
+            const chimGeo = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
+            const chim = new THREE.Mesh(chimGeo, mat);
+            chim.position.set(1.5, height, 0);
+            mesh.add(chim);
+
+        } else if (bType === 'blackhole') {
+            // Buraco Negro
+            const geo = new THREE.BoxGeometry(4, 4, 4);
+            const mat = new THREE.MeshBasicMaterial({ color: 0x000000, wireframe: true });
+            buildingMesh = new THREE.Mesh(geo, mat);
+            buildingMesh.position.y = 4;
+            
+            const ringGeo = new THREE.TorusGeometry(3, 0.1, 16, 32);
+            const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+            ring.rotation.x = Math.PI / 2;
+            buildingMesh.add(ring);
+
+        } else if (bType === 'matrix') {
+            // Matrix
+            const geo = new THREE.BoxGeometry(3, height, 3);
+            const mat = this.getMaterial(0x001100, true);
+            mat.emissive = new THREE.Color(0x00ff00);
+            mat.emissiveIntensity = 0.2;
+            buildingMesh = new THREE.Mesh(geo, mat);
+            buildingMesh.position.y = height / 2;
+
+            const wireGeo = new THREE.EdgesGeometry(geo);
+            const wireMat = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+            const wire = new THREE.LineSegments(wireGeo, wireMat);
+            buildingMesh.add(wire);
+
+        } else if (bType === 'gallery') {
+            // Galeria
+            const geo = new THREE.BoxGeometry(4, height, 4);
+            const mat = new THREE.MeshPhysicalMaterial({ 
+                color: 0x00aaff, 
+                transmission: 0.5, 
+                opacity: 0.8, 
+                transparent: true,
+                roughness: 0 
+            });
+            buildingMesh = new THREE.Mesh(geo, mat);
+            buildingMesh.position.y = height / 2;
+
+        } else {
+            // Office
+            const geo = new THREE.BoxGeometry(3, height, 3);
+            const mat = this.getMaterial(0x222244);
+            buildingMesh = new THREE.Mesh(geo, mat);
+            buildingMesh.position.y = height / 2;
+            // Windows logic (emissive random) handled in updateObjectMaterial potentially or simpler here
+            if (Math.random() > 0.5 && mat.emissive) {
+                mat.emissive = new THREE.Color(0x000044);
+                mat.emissiveIntensity = 0.5;
+            }
+        }
+        
+        mesh.add(buildingMesh);
+
+        // Porta
+        const doorGeo = new THREE.PlaneGeometry(1.5, 2.5);
+        const doorMat = new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide });
+        const door = new THREE.Mesh(doorGeo, doorMat);
+        door.position.set(0, 1.25, 2); 
+        if (bType === 'factory') door.position.z = 3.5;
+        mesh.add(door);
+
+        // Label
+        if (properties.label) {
+            const label = this.createLabel(properties.label);
+            label.position.set(0, height + 1, 0);
+            mesh.add(label);
+        }
+
+    } else if (type === 'monument') {
+        // --- FILE MONUMENT ---
+        mesh = new THREE.Group();
+        const color = properties.color || 0xffffff;
+        
+        const geo = new THREE.OctahedronGeometry(0.8, 2); // Mais detalhes
+        const mat = this.getMaterial(color, true);
+        const m = new THREE.Mesh(geo, mat);
+        mesh.add(m);
+
+        if (properties.label) {
+            const label = this.createLabel(properties.label, 0.5);
+            label.position.y = 1.5;
+            mesh.add(label);
+        }
+
+    } else if (type === 'portal') {
+        // --- PORTAL ---
+        const geo = new THREE.TorusGeometry(1.5, 0.1, 8, 32);
+        const mat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+        mesh = new THREE.Mesh(geo, mat);
+        
+        if (properties.label) {
+            const label = this.createLabel(properties.label);
+            label.position.set(0, 2.0, 0);
+            mesh.add(label); // Label as child
+        }
+
     } else if (type === 'file') {
         // Thin box (File Card)
         const geom = new THREE.BoxGeometry(0.8, 1.1, 0.05);
@@ -470,11 +584,23 @@ export class Universe {
     mesh.castShadow = this.settings.shadows;
     mesh.receiveShadow = this.settings.shadows;
     
+    // Propagate shadows to children (Groups)
+    if (mesh.isGroup) {
+        mesh.traverse((child) => {
+            if (child.isMesh) {
+                child.castShadow = this.settings.shadows;
+                child.receiveShadow = this.settings.shadows;
+            }
+        });
+    }
+
     if (isGhost) { 
         if (mesh.isGroup) {
             mesh.children.forEach(c => {
-                c.material.transparent = true;
-                c.material.opacity = 0.5;
+                if (c.material) {
+                    c.material.transparent = true;
+                    c.material.opacity = 0.5;
+                }
             });
         } else {
             mesh.material.transparent = true; 
@@ -485,6 +611,26 @@ export class Universe {
     this.scene.add(mesh);
     this.objects.set(id, mesh);
     return mesh;
+  }
+
+  createLabel(text, scale=1) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0,0,512,128);
+    ctx.font = 'bold 50px monospace';
+    ctx.fillStyle = '#00ffff'; 
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text.substring(0, 20), 256, 64);
+    
+    const tex = new THREE.CanvasTexture(canvas);
+    const mat = new THREE.SpriteMaterial({ map: tex });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(4 * scale, 1 * scale, 1);
+    return sprite;
   }
 
   removeObject(id) {
