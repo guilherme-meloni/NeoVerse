@@ -1,0 +1,21 @@
+{
+  "name": "multi-universe",
+  "version": "1.0.0",
+  "description": "Multi Universe - App nativo ultra leve",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^1.5.3",
+    "three": "^0.182.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^1.5.9",
+    "vite": "^5.0.0"
+  }
+}
