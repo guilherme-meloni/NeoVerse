@@ -272,8 +272,22 @@ export class Universe {
     const props = mesh.userData.properties;
     const color = props.color || 0xffffff;
     const isNode = mesh.userData.type === 'node';
-    mesh.material.dispose();
-    mesh.material = this.getMaterial(color, isNode);
+    
+    // Handle Groups (Folder/Complex icons)
+    if (mesh.isGroup) {
+        mesh.children.forEach(child => {
+            if (child.isMesh) {
+                 child.material.dispose();
+                 // Keep white paper inside folder white?
+                 // Or just recolor everything for now to match quality mode
+                 // Let's preserve specific "parts" colors if we can, but simpler is safer for quality switch
+                 child.material = this.getMaterial(child.userData.originalColor || color, isNode);
+            }
+        });
+    } else {
+        mesh.material.dispose();
+        mesh.material = this.getMaterial(color, isNode);
+    }
   }
 
   // --- CREATION ---
@@ -322,18 +336,77 @@ export class Universe {
   addObject(type, position, properties, id, isGhost = false) {
     let mesh;
     const segs = 12; 
-    switch (type) {
-      case 'sphere': mesh = new THREE.Mesh(new THREE.SphereGeometry(properties.scale || 1, segs, segs), this.getMaterial(properties.color)); break;
-      case 'cube': mesh = new THREE.Mesh(new THREE.BoxGeometry(properties.scale, properties.scale, properties.scale), this.getMaterial(properties.color)); break;
-      case 'node': mesh = new THREE.Mesh(new THREE.SphereGeometry(0.3 * properties.scale, 8, 8), this.getMaterial(properties.color, true)); break;
-      case 'pyramid': mesh = new THREE.Mesh(new THREE.ConeGeometry(properties.scale, properties.scale * 1.5, 4), this.getMaterial(properties.color)); break;
-      case 'torus': mesh = new THREE.Mesh(new THREE.TorusGeometry(properties.scale, 0.3, 6, 12), this.getMaterial(properties.color)); break;
-      case 'cylinder': mesh = new THREE.Mesh(new THREE.CylinderGeometry(properties.scale * 0.5, properties.scale * 0.5, properties.scale * 2, 8), this.getMaterial(properties.color)); break;
-      default: mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 8), this.getMaterial(0xffffff));
+    
+    if (type === 'folder') {
+        // Create a custom Shape for the folder icon
+        const shape = new THREE.Shape();
+        const w = 1.0;
+        const h = 0.7;
+        const tabW = 0.4;
+        const tabH = 0.15;
+        
+        // Start bottom left
+        shape.moveTo(-w/2, -h/2);
+        // Bottom right
+        shape.lineTo(w/2, -h/2);
+        // Top right (below tab level)
+        shape.lineTo(w/2, h/2 - tabH);
+        // Tab start (right side of tab)
+        shape.lineTo(-w/2 + tabW, h/2 - tabH);
+        // Tab top right
+        shape.lineTo(-w/2 + tabW - 0.05, h/2);
+        // Tab top left
+        shape.lineTo(-w/2 + 0.05, h/2);
+        // Top left (side)
+        shape.lineTo(-w/2, h/2 - 0.1);
+        // Close
+        shape.lineTo(-w/2, -h/2);
+
+        const extrudeSettings = {
+            steps: 1,
+            depth: 0.2, // Thickness
+            bevelEnabled: true,
+            bevelThickness: 0.05,
+            bevelSize: 0.05,
+            bevelSegments: 2
+        };
+
+        const geom = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+        // Center the geometry
+        geom.center();
+        
+        mesh = new THREE.Mesh(geom, this.getMaterial(properties.color));
+        mesh.scale.setScalar(properties.scale || 1);
+        
+    } else if (type === 'file') {
+        // "Data Canister" / Cylinder style (Clean, tech-looking)
+        // Or if user meant "Paperclip", a Torus is closest simple primitive, but Cylinder is safer for "File"
+        const radius = 0.3 * (properties.scale || 1);
+        const height = 1.0 * (properties.scale || 1);
+        const geom = new THREE.CylinderGeometry(radius, radius, height, 16);
+        mesh = new THREE.Mesh(geom, this.getMaterial(properties.color));
+        
+    } else {
+        // Primitives
+        switch (type) {
+          case 'sphere': mesh = new THREE.Mesh(new THREE.SphereGeometry(properties.scale || 1, segs, segs), this.getMaterial(properties.color)); break;
+          case 'cube': mesh = new THREE.Mesh(new THREE.BoxGeometry(properties.scale, properties.scale, properties.scale), this.getMaterial(properties.color)); break;
+          case 'node': mesh = new THREE.Mesh(new THREE.SphereGeometry(0.3 * properties.scale, 8, 8), this.getMaterial(properties.color, true)); break;
+          case 'pyramid': mesh = new THREE.Mesh(new THREE.ConeGeometry(properties.scale, properties.scale * 1.5, 4), this.getMaterial(properties.color)); break;
+          case 'torus': mesh = new THREE.Mesh(new THREE.TorusGeometry(properties.scale, 0.3, 6, 12), this.getMaterial(properties.color)); break;
+          case 'cylinder': mesh = new THREE.Mesh(new THREE.CylinderGeometry(properties.scale * 0.5, properties.scale * 0.5, properties.scale * 2, 8), this.getMaterial(properties.color)); break;
+          default: mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 8), this.getMaterial(0xffffff));
+        }
     }
+
     mesh.position.copy(position);
     mesh.userData = { id, type, properties, isGhost, isSolid: true };
-    if (isGhost) { mesh.material.transparent = true; mesh.material.opacity = 0.5; }
+    
+    if (isGhost) { 
+        mesh.material.transparent = true; 
+        mesh.material.opacity = 0.5; 
+    }
+    
     this.scene.add(mesh);
     this.objects.set(id, mesh);
     return mesh;
@@ -625,22 +698,34 @@ export class Universe {
         this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
         this.raycaster.setFromCamera(this.mouse, this.camera);
         
-        const objects = Array.from(this.objects.values()).filter(o => !o.userData.isGhost);
-        const intersects = this.raycaster.intersectObjects(objects);
+        // Raycast against all objects
+        const objectValues = Array.from(this.objects.values());
+        const intersects = this.raycaster.intersectObjects(objectValues, true); // Recursive just in case
         
         if (intersects.length > 0) {
-            const obj = intersects[0].object;
+            let hit = intersects[0].object;
+
+            // Bubble up to find main object with ID
+            while (hit.parent && !hit.userData.id) {
+                hit = hit.parent;
+            }
 
             // Check if it is a FileSystem object
-            if (obj.userData.properties && obj.userData.properties.filePath) {
-                console.log(`📂 Opening: ${obj.userData.properties.filePath}`);
-                shellOpen(obj.userData.properties.filePath);
+            if (hit.userData.properties && hit.userData.properties.filePath) {
+                console.log(`📂 Opening path: "${hit.userData.properties.filePath}"`);
+                try {
+                    shellOpen(hit.userData.properties.filePath)
+                        .then(() => console.log('✅ Shell open command sent'))
+                        .catch(err => console.error('❌ Shell open failed:', err));
+                } catch (err) {
+                    console.error('❌ Shell open exception:', err);
+                }
                 return;
             }
 
             // Default: Texture Load
-            this.textureTargetObject = obj;
-            this.fileInput.click(); // Open system dialog
+            this.textureTargetObject = intersects[0].object;
+            this.fileInput.click();
         }
     });
 

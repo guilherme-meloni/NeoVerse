@@ -482,7 +482,9 @@ export class ObjectManager {
       node: '⭐',
       pyramid: '🔺',
       torus: '🍩',
-      cylinder: '🥫'
+      cylinder: '🥫',
+      folder: '📁',
+      file: '📄'
     };
     return emojis[type] || '📦';
   }
@@ -531,11 +533,9 @@ export class ObjectManager {
         }
 
         // Layout Parameters
-        const spacing = 1.5;
+        const spacing = 2.0; // Increased spacing for folders
         const cols = Math.ceil(Math.sqrt(entries.length));
         
-        // Define a "Room Center" offset relative to origin
-        // Spawning "FSN" cluster at x=10, z=10 to avoid 0,0 clash
         const originX = 10;
         const originZ = 10;
 
@@ -547,21 +547,42 @@ export class ObjectManager {
             const x = originX + (col * spacing);
             const z = originZ + (row * spacing);
             
-            // Heuristic to detect folder (no perfect way without metadata call, 
-            // but we can assume no extension = folder or check children if recursive was true)
-            // For now, let's just make everything a box.
-            // If it has a dot, it might be a file.
-            const isFile = entry.name && entry.name.includes('.');
+            // Logic to determine Type
+            let type = 'file';
+            let color = 0xcccccc; // Default Gray
+            const name = entry.name || '';
             
-            const type = isFile ? 'cube' : 'cube'; // Keep it FSN style (all cubes?)
-            // Let's make folders GREEN and files BLUE
-            const color = isFile ? 0x00ccff : 0x00ff88;
+            // Heuristic: No extension = Folder
+            // (Imperfect, but simple without stat)
+            if (!name.includes('.')) {
+                type = 'folder';
+                color = 0xffaa00; // Orange/Gold
+            } else {
+                // File Type Detection
+                const ext = name.split('.').pop().toLowerCase();
+                
+                if (['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg'].includes(ext)) {
+                    color = 0xaa00ff; // Purple (Images)
+                } else if (['mp4', 'mkv', 'avi', 'mov', 'webm'].includes(ext)) {
+                    color = 0x00ff00; // Green (Video)
+                } else if (['mp3', 'wav', 'ogg', 'flac'].includes(ext)) {
+                    color = 0x00aaff; // Cyan (Audio)
+                } else if (['js', 'html', 'css', 'json', 'py', 'rs', 'cpp', 'c', 'java', 'ts'].includes(ext)) {
+                    color = 0x0055ff; // Blue (Code)
+                } else if (['exe', 'sh', 'bat', 'appimage', 'bin'].includes(ext)) {
+                    color = 0xff0000; // Red (Executable)
+                } else if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
+                    color = 0xffff00; // Yellow (Archive) - different from folder gold
+                } else if (['pdf', 'doc', 'docx', 'txt', 'md'].includes(ext)) {
+                    color = 0xffffff; // White (Docs)
+                }
+            }
             
             const id = this.generateId();
             
             const properties = {
                 color: color,
-                scale: 0.8,
+                scale: 1, // Standard scale
                 isSolid: true,
                 filePath: entry.path,
                 fileName: entry.name,
@@ -579,12 +600,9 @@ export class ObjectManager {
                 properties,
                 ownerId: this.windowManager.label
             });
-            
-            // Also add text label? (Complex in vanilla Three.js without font loader)
-            // We'll skip text for now, maybe tooltip on hover later.
         });
         
-        // Move player nearby?
+        // Move player nearby
         if (this.universe.hasPlayer && this.universe.player) {
             this.universe.player.position.set(originX - 2, 2, originZ - 2);
             this.universe.playerVelocity.set(0,0,0);
