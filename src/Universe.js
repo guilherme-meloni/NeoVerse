@@ -47,12 +47,12 @@ export class Universe {
     this.jumpPower = 0.3;
     this.isGrounded = false;
     
-    // Bind para evento de pointer lock
     this.onPointerLockChange = this.onPointerLockChange.bind(this);
+    this.onPointerLockError = this.onPointerLockError.bind(this);
 
     // Throttle para animação
     this.lastFrameTime = 0;
-    this.frameInterval = 1000 / 30; // 30 FPS max
+    this.frameInterval = 1000 / 24; // 24 FPS fixo
 
     this.init();
   }
@@ -61,7 +61,7 @@ export class Universe {
     // Scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x000000);
-    this.scene.fog = new THREE.FogExp2(0x000000, 0.02);
+    this.scene.fog = new THREE.FogExp2(0x000000, 0.05); // Fog fixo
 
     // Camera
     const aspect = window.innerWidth / window.innerHeight;
@@ -69,24 +69,22 @@ export class Universe {
     this.camera.position.set(0, 5, 12);
     this.camera.lookAt(0, 0, 0);
 
-    // Renderer SUPER OTIMIZADO para hardware fraco
+    // Renderer SUPER OTIMIZADO - Configuração única
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
-      antialias: false, // Desliga anti-aliasing
+      antialias: false,
       alpha: false,
       powerPreference: "low-power",
-      precision: "lowp" // Precisão baixa
+      precision: "lowp",
+      depth: true,
+      stencil: false
     });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(1); // Força 1:1 no modo 3D
-    this.renderer.shadowMap.enabled = false; // Sem sombras
+    this.renderer.setPixelRatio(0.4); // Pixel ratio fixo baixo para performance
+    this.renderer.shadowMap.enabled = false;
 
-    // Iluminação removida (MeshBasicMaterial não usa luz, economiza CPU)
-    // const ambientLight = new THREE.AmbientLight(0x404040, 1.5);
-    // this.scene.add(ambientLight);
-    // const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
-    // ...
-
+    // Iluminação removida (MeshBasicMaterial não usa)
+    
     // Grid simples
     const gridHelper = new THREE.GridHelper(20, 10, 0x00ff00, 0x003300);
     this.scene.add(gridHelper);
@@ -99,31 +97,32 @@ export class Universe {
     this.floor.userData.isFloor = true;
     this.scene.add(this.floor);
 
-    // Player
-    if (this.hasPlayer) {
-      this.createPlayer();
-    }
+    // Player (temporariamente desabilitado para depuração)
+    // if (this.hasPlayer) {
+    //   this.createPlayer();
+    // }
 
-    // Estrelas reduzidas
-    this.createStarField();
+    // Estrelas (temporariamente desabilitado para depuração)
+    // this.createStarField();
 
     // Controles
     this.setupControls();
     document.addEventListener('pointerlockchange', this.onPointerLockChange);
+    document.addEventListener('pointerlockerror', this.onPointerLockError);
     window.addEventListener('resize', () => this.onResize());
 
     // Inicia animação
     this.animate();
 
-    console.log('🌌 Universe iniciado (modo LOW PERFORMANCE)');
+    console.log('🌌 Universe iniciado (modo PERFORMANCE EXTREMA)');
   }
 
   createStarField() {
     const geometry = new THREE.BufferGeometry();
     const vertices = [];
 
-    // Reduzido de 300 para 100 estrelas
-    for (let i = 0; i < 100; i++) {
+    // Reduzido para 50 estrelas (Performance Extrema)
+    for (let i = 0; i < 50; i++) {
       const x = (Math.random() - 0.5) * 100;
       const y = (Math.random() - 0.5) * 100;
       const z = (Math.random() - 0.5) * 100;
@@ -148,13 +147,13 @@ export class Universe {
 
     // Geometrias simplificadas (menos segmentos)
     const bodyGeom = new THREE.CylinderGeometry(0.3, 0.3, 1.4, 6);
-    const bodyMat = new THREE.MeshBasicMaterial({ // MeshBasic é mais leve
+    const bodyMat = new THREE.MeshBasicMaterial({
       color: 0x00ffff
     });
     const body = new THREE.Mesh(bodyGeom, bodyMat);
     body.position.y = 0.7;
 
-    const headGeom = new THREE.SphereGeometry(0.25, 6, 6);
+    const headGeom = new THREE.SphereGeometry(0.25, 4, 4); // Low poly extremo
     const head = new THREE.Mesh(headGeom, bodyMat);
     head.position.y = 1.6;
 
@@ -169,79 +168,87 @@ export class Universe {
   }
 
   toggleViewMode() {
-    if (!this.hasPlayer) {
-      console.log('❌ Sem player nesta janela');
-      return;
-    }
+    if (!this.hasPlayer) return;
 
-    this.viewMode = this.viewMode === '3d' ? 'fps' : '3d';
-
-    if (this.viewMode === 'fps') {
-      // MODO FPS
-      this.fpsYaw = Math.PI;
-      this.fpsPitch = 0;
-
-      const eyeHeight = 1.6;
-      this.camera.position.set(
-        this.player.position.x,
-        this.player.position.y + eyeHeight,
-        this.player.position.z
-      );
-
-      this.camera.rotation.order = 'YXZ';
-      this.camera.rotation.set(0, this.fpsYaw, 0);
-
-      // OTIMIZAÇÕES PESADAS
-      this.renderer.setPixelRatio(this.fpsSettings.pixelRatio); // Reduz resolução
-      this.scene.fog.density = 0.05; // Fog mais próximo
-      
-      // Esconde estrelas para economizar
-      this.scene.children.forEach(child => {
-        if (child instanceof THREE.Points) {
-          child.visible = false;
-        }
-      });
-
-      // Solicita Pointer Lock real
-      this.canvas.requestPointerLock();
-      
-      console.log('👁️ Modo FPS ativado (LOW PERFORMANCE)');
-    } else {
-      // Volta pra 3D
+    // Apenas solicita a mudança de estado do ponteiro
+    // A lógica real acontece em onPointerLockChange
+    if (document.pointerLockElement === this.canvas) {
       document.exitPointerLock();
-      
-      this.canvas.style.cursor = 'default';
-      this.renderer.setPixelRatio(1);
-      this.scene.fog.density = 0.02;
-      
-      // Mostra estrelas novamente
-      this.scene.children.forEach(child => {
-        if (child instanceof THREE.Points) {
-          child.visible = true;
-        }
-      });
-      
-      this.resetCamera3D();
-      console.log('🌍 Modo 3D ativado');
+    } else {
+      // Tenta travar. Se falhar, o erro é pego no listener
+      const promise = this.canvas.requestPointerLock();
+      // Alguns navegadores retornam promise, outros não
+      if (promise && promise.catch) {
+        promise.catch(err => console.error('PointerLock request failed:', err));
+      }
     }
+  }
 
-    // Mostra/esconde player
-    if (this.player) {
-      this.player.visible = this.viewMode === '3d';
+  onPointerLockError() {
+    console.error('❌ Erro no Pointer Lock');
+    // Garante que voltamos ao estado seguro
+    if (this.viewMode === 'fps') {
+      document.exitPointerLock(); // Tenta limpar
+      // Força modo 3D manualmente se o evento de change não disparar
+      this.setMode3D();
     }
   }
 
   onPointerLockChange() {
     if (document.pointerLockElement === this.canvas) {
-      // Travado com sucesso, nada a fazer
+      // Entrou no modo FPS
+      this.setModeFPS();
     } else {
-      // Destravado (ex: usuário apertou ESC)
-      // Se ainda achamos que estamos em FPS, devemos sair
-      if (this.viewMode === 'fps') {
-        this.toggleViewMode();
-        this.updateViewUI();
-      }
+      // Saiu do modo FPS
+      this.setMode3D();
     }
+    this.updateViewUI();
+  }
+
+  setModeFPS() {
+    if (this.viewMode === 'fps') return; // Já está
+    this.viewMode = 'fps';
+    
+    this.fpsYaw = Math.PI;
+    this.fpsPitch = 0;
+
+    const eyeHeight = 1.6;
+    this.camera.position.set(
+      this.player.position.x,
+      this.player.position.y + eyeHeight,
+      this.player.position.z
+    );
+
+    this.camera.rotation.order = 'YXZ';
+    this.camera.rotation.set(0, this.fpsYaw, 0);
+
+    // Esconde estrelas
+    this.scene.children.forEach(child => {
+      if (child instanceof THREE.Points) {
+        child.visible = false;
+      }
+    });
+
+    if (this.player) this.player.visible = false;
+    console.log('👁️ Modo FPS ativado');
+  }
+
+  setMode3D() {
+    if (this.viewMode === '3d') return; // Já está
+    this.viewMode = '3d';
+    
+    this.canvas.style.cursor = 'default';
+    
+    // Mostra estrelas
+    this.scene.children.forEach(child => {
+      if (child instanceof THREE.Points) {
+        child.visible = true;
+      }
+    });
+    
+    this.resetCamera3D();
+    if (this.player) this.player.visible = true;
+    console.log('🌍 Modo 3D ativado');
   }
 
   resetCamera3D() {
@@ -838,6 +845,7 @@ export class Universe {
 
   cleanup() {
     document.removeEventListener('pointerlockchange', this.onPointerLockChange);
+    document.removeEventListener('pointerlockerror', this.onPointerLockError);
 
     if (this.animationId) {
       cancelAnimationFrame(this.animationId);
