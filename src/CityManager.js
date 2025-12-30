@@ -91,51 +91,61 @@ export class CityManager {
     floor.max.set(150, -0.05, 150);
     this.universe.colliders.push(floor);
 
-    // LAYOUT ORGÂNICO - Quarteirões variados
-    const STREET = 10;
-    const BLOCK = 7;
+    // LAYOUT ORGÂNICO - Espiral de Phyllotaxis
+    // Garante distribuição uniforme e circular (dentro do mapa)
+    const SPACING = 14; 
     
     let buildingIndex = 0;
-    const gridSize = Math.ceil(Math.sqrt(dirs.length));
+    let spatialIndex = 8; // Começa afastado do centro para a praça
 
-    for (let bx = -gridSize; bx <= gridSize; bx++) {
-        for (let bz = -gridSize; bz <= gridSize; bz++) {
-            if (buildingIndex >= dirs.length) break;
+    while (buildingIndex < dirs.length) {
+        // Fórmula Phyllotaxis (ângulo áureo)
+        const angle = spatialIndex * 137.5 * (Math.PI / 180);
+        const r = SPACING * Math.sqrt(spatialIndex);
+        
+        const x = r * Math.cos(angle);
+        const z = r * Math.sin(angle);
 
-            // Offset orgânico (não perfeitamente alinhado)
-            const offsetX = (Math.random() - 0.5) * 3;
-            const offsetZ = (Math.random() - 0.5) * 3;
+        spatialIndex++;
 
-            const x = bx * (BLOCK + STREET) + offsetX;
-            const z = bz * (BLOCK + STREET) + offsetZ;
-
-            // Pular algumas posições para criar praças
-            if (Math.random() > 0.85) {
-                this.createPark(x, z);
-                continue;
-            }
-
-            await this.createArchitecturalBuilding(dirs[buildingIndex], x, z);
-            buildingIndex++;
+        // Limite do mapa (raio 140 para segurança dentro do collider de 150)
+        if (r > 140) {
+            console.log("⚠️ Limite da cidade atingido - parando expansão");
+            break;
         }
+
+        // Offset orgânico
+        const offsetX = (Math.random() - 0.5) * 4;
+        const offsetZ = (Math.random() - 0.5) * 4;
+        const finalX = x + offsetX;
+        const finalZ = z + offsetZ;
+
+        // Pular algumas posições para criar praças
+        if (Math.random() > 0.92) {
+            this.createPark(finalX, finalZ);
+            continue;
+        }
+
+        await this.createArchitecturalBuilding(dirs[buildingIndex], finalX, finalZ);
+        buildingIndex++;
     }
 
     // Arquivos em praça central circular
-    const plaza = gridSize * (BLOCK + STREET) * 0.7;
+    const plazaRadius = 18;
     files.forEach((file, i) => {
         const angle = (i / files.length) * Math.PI * 2;
-        const x = Math.cos(angle) * plaza;
-        const z = Math.sin(angle) * plaza;
+        const x = Math.cos(angle) * plazaRadius;
+        const z = Math.sin(angle) * plazaRadius;
         this.createStylizedFile(file, x, z);
     });
 
     // Portal de saída
     if (this.currentPath !== this.initialRootPath) {
-        await this.createStylizedPortal(0, plaza + 8);
+        await this.createStylizedPortal(0, 0); // No centro absoluto
     }
 
-    // Iluminação da cidade
-    this.addCityLights(gridSize, BLOCK + STREET);
+    // Iluminação da cidade espalhada
+    this.addCityLights(5, 40); // Ajustado para não depender de grid
 
     console.log(`✅ Cidade renderizada`);
   }

@@ -145,7 +145,7 @@ export class Universe {
 
     // Helpers
     // FIX: Grid levemente elevado e com transparência para evitar flickering
-    const gridHelper = new THREE.GridHelper(50, 50, 0x00ff00, 0x003300);
+    const gridHelper = new THREE.GridHelper(300, 60, 0x00ff00, 0x003300);
     gridHelper.position.y = 0.05; 
     gridHelper.material.transparent = true;
     gridHelper.material.opacity = 0.5;
@@ -153,7 +153,7 @@ export class Universe {
     this.scene.add(gridHelper);
 
     // Chão invisível (mas sólido para raycast)
-    const floorGeom = new THREE.PlaneGeometry(100, 100);
+    const floorGeom = new THREE.PlaneGeometry(300, 300);
     const floorMat = new THREE.MeshBasicMaterial({ visible: false });
     this.floor = new THREE.Mesh(floorGeom, floorMat);
     this.floor.rotation.x = -Math.PI / 2;
