@@ -17,12 +17,6 @@
 
 ---
 
-https://github.com/seu-usuario/neoverse/assets/demo.gif
-
-</div>
-
----
-
 ## 🎯 O que é NeoVerse?
 
 **NeoVerse** é um explorador de arquivos tridimensional experimental onde **cada janela é um universo independente**. Navegue pelo seu sistema de arquivos como se estivesse dentro de uma metrópole cyberpunk, onde cada pasta é um prédio e cada arquivo é um objeto interativo que você pode pegar, manipular e visualizar.
@@ -33,7 +27,7 @@ Não é apenas um visualizador 3D - é um **metaverso local** rodando no seu pr�
 
 ```
 📁 Pasta no disco       →  🏢 Prédio arquitetônico na cidade
-📄 Arquivo              →  💎 Objeto 3D interativo  
+📄 Arquivo              →  💎 Objeto 3D interativo
 🪟 Janela do programa   →  🌍 Universo independente
 🔗 Janelas sobrepostas  →  🌌 Universos mesclados em tempo real
 👤 Você                 →  🎮 Avatar navegando em primeira pessoa
@@ -291,15 +285,15 @@ sudo dnf group install "C Development Tools and Libraries"
 <details>
 <summary><b>🪟 Windows 10/11</b></summary>
 
-1. **Instalar Node.js**  
+1. **Instalar Node.js**
    Download: https://nodejs.org/ (versão LTS)
 
-2. **Instalar Rust**  
-   Download: https://rustup.rs/  
+2. **Instalar Rust**
+   Download: https://rustup.rs/
    Seguir instruções do instalador
 
-3. **Instalar Microsoft C++ Build Tools**  
-   Download: https://visualstudio.microsoft.com/visual-cpp-build-tools/  
+3. **Instalar Microsoft C++ Build Tools**
+   Download: https://visualstudio.microsoft.com/visual-cpp-build-tools/
    Marcar "Desktop development with C++"
 
 4. **Instalar pnpm** (opcional mas recomendado)
@@ -307,7 +301,7 @@ sudo dnf group install "C Development Tools and Libraries"
    npm install -g pnpm
    ```
 
-5. **Instalar WebView2** (geralmente já vem no Windows 11)  
+5. **Instalar WebView2** (geralmente já vem no Windows 11)
    Download: https://developer.microsoft.com/microsoft-edge/webview2/
 
 </details>
@@ -335,7 +329,7 @@ Se você testar, por favor reporte!
 
 ```bash
 # 1. Clone o repositório
-git clone https://github.com/seu-usuario/neoverse.git
+git clone https://github.com/guilherme-meloni/neoverse.git
 cd neoverse
 
 # 2. Instale dependências JavaScript
@@ -849,7 +843,7 @@ O NeoVerse precisa de ajuda em várias áreas:
 
 ### 🐛 Reportando Bugs
 
-Abra uma [Issue](https://github.com/seu-usuario/neoverse/issues) com:
+Abra uma [Issue](https://github.com/guilherme-meloni/NeoVerse/issues) com:
 
 - **Sistema Operacional** (Linux Ubuntu 22.04, Windows 11, etc)
 - **Hardware** (GPU, CPU, RAM)
@@ -875,23 +869,23 @@ Abra uma [Issue](https://github.com/seu-usuario/neoverse/issues) com:
 ### 🔧 Workarounds
 
 #### Linux: Pointer Lock não funciona
-**Problema:** Em alguns window managers (i3, bspwm), Pointer Lock falha.  
+**Problema:** Em alguns window managers (i3, bspwm), Pointer Lock falha.
 **Solução:** Use as **setas do teclado** para olhar ao redor no modo FPS.
 
 #### Windows: Antivirus bloqueia
-**Problema:** Windows Defender pode bloquear o .exe  
+**Problema:** Windows Defender pode bloquear o .exe
 **Solução:** Adicione exceção ou compile você mesmo.
 
 #### Performance baixa
-**Problema:** FPS abaixo de 30  
-**Solução:** 
+**Problema:** FPS abaixo de 30
+**Solução:**
 1. Ative **Modo Retro** no menu GFX
 2. Feche outras janelas do NeoVerse
 3. Crie cidades com menos itens (<50)
 4. Reduza resolução da janela
 
 #### Cidade muito grande
-**Problema:** Pasta com 500+ itens trava  
+**Problema:** Pasta com 500+ itens trava
 **Solução:** NeoVerse limita automaticamente a 150 itens. Organize melhor suas pastas.
 
 ---
@@ -975,7 +969,7 @@ pnpm run tauri:dev
 
 ---
 
-Made with 💚 by [GuilhermeM]  
+Made with 💚 by [GuilhermeM]
 Built with [Three.js](https://threejs.org/) + [Tauri](https://tauri.app/)
 
 [⬆ Voltar ao topo](#-neoverse)
