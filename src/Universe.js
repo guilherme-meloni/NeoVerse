@@ -57,6 +57,7 @@ export class Universe {
 
     // Controles FPS
     this.keys = { w: false, a: false, s: false, d: false, shift: false, space: false, e: false, enter: false };
+    this.terminalActive = false; // NOVO: Pausa controles quando terminal está ativo
     this.joystick = { active: false, dx: 0, dy: 0, originX: 0, originY: 0 }; // Mobile Joystick
     this.fpsYaw = Math.PI;
     this.fpsPitch = 0;
@@ -772,6 +773,18 @@ export class Universe {
   setupControls() {
     // Keys
     document.addEventListener('keydown', (e) => {
+      // ===== PRIORIDADE: ESC sempre funciona (sair FPS) =====
+      if (e.key === 'Escape' && this.viewMode === 'fps') {
+          this.exitFPS();
+          return;
+      }
+      
+      // ===== BLOQUEAR MOVIMENTO SE TERMINAL ATIVO =====
+      const blockedKeys = ['w','a','s','d',' ','arrowup','arrowdown','arrowleft','arrowright'];
+      if (this.terminalActive && blockedKeys.includes(e.key.toLowerCase())) {
+          return; // Ignora estas teclas quando terminal está aberto
+      }
+
       const k = e.key.toLowerCase();
       if(this.keys.hasOwnProperty(k)) this.keys[k] = true;
       if(e.key === 'ArrowUp') this.keys.arrowUp = true;
@@ -1077,86 +1090,93 @@ export class Universe {
 
     try {
         if (this.viewMode === 'fps' && this.player) {
-          const speed = this.keys.shift ? 0.3 : 0.15; // Adjusted speed
-          
-          // --- MOVEMENT VECTORS ---
-          const forward = new THREE.Vector3();
-          this.camera.getWorldDirection(forward);
-          forward.y = 0; 
-          forward.normalize();
+          // ===== VERIFICAÇÃO TERMINAL =====
+          // Se terminal ativo, apenas atualiza câmera sem movimento
+          if (this.terminalActive) {
+            this.camera.position.copy(this.player.position);
+            this.camera.position.y += 1.6;
+            // Pula processamento de física/movimento
+          } else {
+            const speed = this.keys.shift ? 0.3 : 0.15; // Adjusted speed
+            
+            // --- MOVEMENT VECTORS ---
+            const forward = new THREE.Vector3();
+            this.camera.getWorldDirection(forward);
+            forward.y = 0; 
+            forward.normalize();
 
-          const right = new THREE.Vector3();
-          right.crossVectors(forward, this.camera.up).normalize();
+            const right = new THREE.Vector3();
+            right.crossVectors(forward, this.camera.up).normalize();
 
-          // Calculate Move Input
-          let dx = 0;
-          let dz = 0;
+            // Calculate Move Input
+            let dx = 0;
+            let dz = 0;
 
-          // Keyboard
-          if (this.keys.w) { dx += forward.x; dz += forward.z; }
-          if (this.keys.s) { dx -= forward.x; dz -= forward.z; }
-          if (this.keys.d) { dx += right.x; dz += right.z; }
-          if (this.keys.a) { dx -= right.x; dz -= right.z; }
+            // Keyboard
+            if (this.keys.w) { dx += forward.x; dz += forward.z; }
+            if (this.keys.s) { dx -= forward.x; dz -= forward.z; }
+            if (this.keys.d) { dx += right.x; dz += right.z; }
+            if (this.keys.a) { dx -= right.x; dz -= right.z; }
 
-          // Joystick
-          if (this.joystick.active) {
-              const joyFwd = -this.joystick.dy;
-              const joyRight = this.joystick.dx;
-              dx += (forward.x * joyFwd + right.x * joyRight);
-              dz += (forward.z * joyFwd + right.z * joyRight);
+            // Joystick
+            if (this.joystick.active) {
+                const joyFwd = -this.joystick.dy;
+                const joyRight = this.joystick.dx;
+                dx += (forward.x * joyFwd + right.x * joyRight);
+                dz += (forward.z * joyFwd + right.z * joyRight);
+            }
+
+            // Apply Movement with Collision Check (X Axis)
+            if (dx !== 0 || dz !== 0) {
+                // Normalize if moving diagonally to prevent super-speed, unless joystick which is already analog
+                if (!this.joystick.active && (dx !== 0 && dz !== 0)) {
+                    const len = Math.sqrt(dx*dx + dz*dz);
+                    dx /= len; dz /= len;
+                }
+                
+                const moveX = dx * speed;
+                const nextPos = this.player.position.clone();
+                nextPos.x += moveX;
+                
+                if (!this.checkCollision(nextPos)) {
+                    this.player.position.x = nextPos.x;
+                }
+
+                // Apply Movement with Collision Check (Z Axis)
+                const moveZ = dz * speed;
+                nextPos.copy(this.player.position); // Reset to current valid pos
+                nextPos.z += moveZ;
+
+                if (!this.checkCollision(nextPos)) {
+                    this.player.position.z = nextPos.z;
+                }
+            }
+            
+            // --- ROTATION (Mouse Look) ---
+            this.camera.rotation.order = 'YXZ';
+            this.camera.rotation.y = this.fpsYaw;
+            this.camera.rotation.x = this.fpsPitch;
+
+            // --- PHYSICS (Gravity) ---
+            if(this.keys.space && this.isGrounded) {
+                this.playerVelocity.y = this.jumpPower;
+                this.isGrounded = false;
+            }
+            this.playerVelocity.y += this.gravity;
+            
+            this.player.position.y += this.playerVelocity.y;
+            
+            // Floor / Ground Collision
+            if(this.player.position.y < 0.1) {
+                this.player.position.y = 0.1;
+                this.playerVelocity.y = 0;
+                this.isGrounded = true;
+            }
+            
+            // Lock Camera to Player Head
+            this.camera.position.copy(this.player.position);
+            this.camera.position.y += 1.6;
           }
-
-          // Apply Movement with Collision Check (X Axis)
-          if (dx !== 0 || dz !== 0) {
-              // Normalize if moving diagonally to prevent super-speed, unless joystick which is already analog
-              if (!this.joystick.active && (dx !== 0 && dz !== 0)) {
-                  const len = Math.sqrt(dx*dx + dz*dz);
-                  dx /= len; dz /= len;
-              }
-              
-              const moveX = dx * speed;
-              const nextPos = this.player.position.clone();
-              nextPos.x += moveX;
-              
-              if (!this.checkCollision(nextPos)) {
-                  this.player.position.x = nextPos.x;
-              }
-
-              // Apply Movement with Collision Check (Z Axis)
-              const moveZ = dz * speed;
-              nextPos.copy(this.player.position); // Reset to current valid pos
-              nextPos.z += moveZ;
-
-              if (!this.checkCollision(nextPos)) {
-                  this.player.position.z = nextPos.z;
-              }
-          }
-          
-          // --- ROTATION (Mouse Look) ---
-          this.camera.rotation.order = 'YXZ';
-          this.camera.rotation.y = this.fpsYaw;
-          this.camera.rotation.x = this.fpsPitch;
-
-          // --- PHYSICS (Gravity) ---
-          if(this.keys.space && this.isGrounded) {
-              this.playerVelocity.y = this.jumpPower;
-              this.isGrounded = false;
-          }
-          this.playerVelocity.y += this.gravity;
-          
-          this.player.position.y += this.playerVelocity.y;
-          
-          // Floor / Ground Collision
-          if(this.player.position.y < 0.1) {
-              this.player.position.y = 0.1;
-              this.playerVelocity.y = 0;
-              this.isGrounded = true;
-          }
-          
-          // Lock Camera to Player Head
-          this.camera.position.copy(this.player.position);
-          this.camera.position.y += 1.6;
-
         }
 
         if (this.settings.bloom) {
