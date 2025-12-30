@@ -15,6 +15,8 @@
 
 [Instalação](#-instalação) • [Funcionalidades](#-funcionalidades) • [Uso](#-como-usar) • [Visão Futura](#-visão-futura) • [Contribuir](#-contribuindo)
 
+</div>
+
 ---
 
 ## 🎯 O que é NeoVerse?
@@ -59,6 +61,7 @@ Imagine um programador trabalhando remotamente:
 ### 🎮 Modos de Visualização
 
 #### 🌐 Modo Orbital (3D)
+
 Controles estilo Blender para navegar, rotacionar e manipular objetos:
 - Orbitar câmera com botão do meio do mouse
 - Pan com Shift + botão do meio
@@ -66,6 +69,7 @@ Controles estilo Blender para navegar, rotacionar e manipular objetos:
 - Arrastar objetos com clique esquerdo
 
 #### 🚶 Modo FPS (Primeira Pessoa)
+
 Ande **literalmente dentro** do seu sistema de arquivos:
 - Física realista com gravidade e colisão
 - Controle WASD para movimento
@@ -104,12 +108,14 @@ Ande **literalmente dentro** do seu sistema de arquivos:
 Quando você **entra em uma pasta-prédio**, o NeoVerse cria salas temáticas baseadas no conteúdo:
 
 #### 🖼️ Galeria (Pastas com imagens)
+
 - Quadros nas paredes com molduras
 - Iluminação suave tipo museu
 - Esculturas abstratas no centro
 - Cada arquivo é uma obra de arte
 
 #### 🖥️ Sala de Servidores (Pastas com código)
+
 - Racks de servidores em corredores
 - LEDs verdes e vermelhos piscando
 - Névoa verde tipo Matrix
@@ -117,18 +123,21 @@ Quando você **entra em uma pasta-prédio**, o NeoVerse cria salas temáticas ba
 - Cada arquivo é um servidor torre
 
 #### 📚 Biblioteca (Pastas com documentos)
+
 - Estantes de madeira
 - Livros organizados
 - Iluminação quente alaranjada
 - Cada arquivo é um livro na prateleira
 
 #### 🎬 Cinema (Pastas com vídeos)
+
 - Tela gigante 16:9 na frente
 - Poltronas vermelhas em fileiras
 - Cada arquivo é uma poltrona
 - Atmosfera escura
 
 #### 🏢 Lobby Genérico
+
 - Sala padrão com objetos em espiral
 - Elevadores nos cantos para subpastas
 
@@ -166,6 +175,7 @@ Janela 1                  Janela 2
 **Roda em QUALQUER máquina - de um Pentium 4 até uma RTX 4090**
 
 #### 👾 Modo Retro
+
 - Materiais básicos (MeshBasicMaterial)
 - Sem sombras
 - Sem pós-processamento
@@ -173,6 +183,7 @@ Janela 1                  Janela 2
 - **30-60 FPS em hardware de 2010**
 
 #### ✨ Modo Ultra
+
 - Materiais PBR (MeshStandardMaterial)
 - Sombras dinâmicas PCF suaves
 - Bloom (brilho)
@@ -190,6 +201,7 @@ Janela 1                  Janela 2
 ### 🛠️ Ferramentas e Utilitários
 
 #### 💻 Terminal Integrado
+
 Console Unix-like com comandos:
 ```bash
 ~ $ help          # Lista todos os comandos
@@ -205,11 +217,13 @@ Console Unix-like com comandos:
 Atalho: **T** para abrir/fechar
 
 #### 🎨 Drag & Drop de Texturas
+
 - Arraste qualquer imagem PNG/JPG para um objeto
 - Aplica como textura automaticamente
 - Funciona em qualquer objeto 3D
 
 #### ✏️ Editor de Objetos em Tempo Real
+
 Clique em qualquer objeto seu para editar:
 - 🎨 **Cor** (picker visual)
 - 📏 **Tamanho** (slider de 0.1x a 3x)
@@ -218,6 +232,7 @@ Clique em qualquer objeto seu para editar:
 - Sincronizado entre universos
 
 #### 📦 Objetos Primitivos
+
 Crie formas 3D básicas:
 - 🔵 Esfera
 - 🧊 Cubo
@@ -227,6 +242,7 @@ Crie formas 3D básicas:
 - ⭐ Node (esfera emissiva)
 
 #### 📂 Sistema de Arquivos 3D (Legacy)
+
 Versão simplificada antes das Cidades:
 - Cria grade com arquivos e pastas
 - Cores baseadas em tipo de arquivo
@@ -457,24 +473,28 @@ ESC                      # Fechar terminal
 ### Menu Lateral (☰)
 
 #### 📦 Aba OBJ (Objetos)
+
 - Botões para criar primitivos (esfera, cubo, etc)
 - Botão para remover seleção
 - Lista de todos os objetos na cena
 - Objetos "fantasmas" de outros universos marcados
 
 #### 🌍 Aba MUNDO
+
 - **🪟 Nova Janela** - Abre novo universo
 - **📂 Criar Sala (FSN)** - Versão legacy de visualização 3D
 - **🏙️ Criar Cidade** - **A feature principal!**
 - **👁️ Alternar FPS / 3D** - Muda modo de visão
 
 #### 🌐 Aba REDE (Futuro)
+
 - **Meu Código** - Código de 6 dígitos do seu universo
 - **Conectar** - Conecta ao servidor WebSocket
 - **Mesclar Universos** - Digite código de outro universo
 - Status: Online/Offline
 
 #### 🎨 Aba GFX (Gráficos)
+
 - **👾 RETRO** - Máxima performance
 - **✨ ULTRA** - Máxima qualidade
 - Checkboxes individuais:
@@ -668,6 +688,7 @@ Seu PC         NAS/Servidor           PC Trabalho
 ```
 
 #### 🥽 v3.0 - Realidade Virtual (12-18 meses)
+
 - [ ] Suporte a OpenVR/OpenXR
 - [ ] Controles VR nativos (Vive, Oculus, Index, etc)
 - [ ] Locomotion VR (teleporte, movimento livre)
@@ -687,7 +708,7 @@ Seu PC         NAS/Servidor           PC Trabalho
    - Mesa no centro
    - Arquivos .env, config.json são "folhas de papel" na mesa
    - Arquivos .js, .svelte são "livros" na estante
-   - Subpastas são "gavetas"
+   - Subpasas são "gavetas"
 4. Pega o README.md NA MÃO e LÊ
 5. Quer editar? Joga na mesa
 6. Abre tela virtual de 90" flutuante
@@ -708,6 +729,7 @@ Seu PC         NAS/Servidor           PC Trabalho
 ```
 
 #### 🚀 v4.0 - Além (18+ meses)
+
 - [ ] Mobile (Android/iOS) com ARCore/ARKit
 - [ ] Modo AR (Realidade Aumentada)
 - [ ] Plugin system (JavaScript)
@@ -718,33 +740,36 @@ Seu PC         NAS/Servidor           PC Trabalho
 - [ ] Whiteboard colaborativo 3D
 - [ ] Gravação de sessões (replay)
 
----
-
 ### 💭 Casos de Uso Futuros
 
 #### 👨‍💻 Desenvolvedor
+
 - Trabalho remoto imersivo
 - Code review em VR com colegas
 - Visualizar arquitetura de projeto em 3D
 - Debug visual (stack trace em espaço 3D)
 
 #### 🎨 Designer
+
 - Visualizar portfolio em galeria 3D
 - Apresentar trabalhos para clientes em VR
 - Organizar assets por projeto em salas
 
 #### 🎓 Educação
+
 - Professores criando "salas de aula" por matéria
 - Alunos explorando material didático em 3D
 - Bibliotecas virtuais com livros interativos
 
 #### 🏢 Empresas
+
 - Onboarding imersivo (tour virtual pelo "escritório digital")
 - Reuniões em salas virtuais
 - Apresentações em 3D
 - Acesso a recursos da empresa via portais
 
 #### 🎮 Gamers
+
 - Organizar biblioteca de jogos em galeria
 - Mods e saves em salas temáticas
 - Screenshots em galeria tipo museu
@@ -760,6 +785,7 @@ Este projeto é **100% gratuito e sempre será**. Você pode usar, modificar, di
 O NeoVerse precisa de ajuda em várias áreas:
 
 #### 🖌️ Design Visual
+
 - Criar novos tipos de prédios
 - Desenhar lobbies temáticos
 - Desenvolver shaders customizados
@@ -768,6 +794,7 @@ O NeoVerse precisa de ajuda em várias áreas:
 - Criar temas de interface
 
 #### ⚡ Performance
+
 - Otimizações para hardware antigo
 - Profiling e bottleneck analysis
 - Implementar LOD (Level of Detail)
@@ -776,6 +803,7 @@ O NeoVerse precisa de ajuda em várias áreas:
 - Web Workers para processamento paralelo
 
 #### 🏗️ Features
+
 - Novos tipos de lobbies
 - Mais comandos no terminal
 - Sistema de plugins
@@ -784,6 +812,7 @@ O NeoVerse precisa de ajuda em várias áreas:
 - Sistema de física avançado
 
 #### 🧪 Testes
+
 - Testar em diferentes hardware
 - Testar em diferentes sistemas operacionais
 - Reportar bugs com detalhes
@@ -791,6 +820,7 @@ O NeoVerse precisa de ajuda em várias áreas:
 - Performance benchmarks
 
 #### 📚 Documentação
+
 - Melhorar este README
 - Criar tutoriais em vídeo
 - Escrever guias de uso
@@ -799,6 +829,7 @@ O NeoVerse precisa de ajuda em várias áreas:
 - Criar wiki
 
 #### 🌐 Networking (v2.0)
+
 - Implementar servidor em Rust
 - Protocolos de sincronização
 - Sistema de autenticação
@@ -806,6 +837,7 @@ O NeoVerse precisa de ajuda em várias áreas:
 - Servidor relay
 
 #### 🥽 VR (v3.0)
+
 - Integração OpenVR/OpenXR
 - Controles VR
 - UI em VR
@@ -869,14 +901,17 @@ Abra uma [Issue](https://github.com/guilherme-meloni/NeoVerse/issues) com:
 ### 🔧 Workarounds
 
 #### Linux: Pointer Lock não funciona
+
 **Problema:** Em alguns window managers (i3, bspwm), Pointer Lock falha.
 **Solução:** Use as **setas do teclado** para olhar ao redor no modo FPS.
 
 #### Windows: Antivirus bloqueia
+
 **Problema:** Windows Defender pode bloquear o .exe
 **Solução:** Adicione exceção ou compile você mesmo.
 
 #### Performance baixa
+
 **Problema:** FPS abaixo de 30
 **Solução:**
 1. Ative **Modo Retro** no menu GFX
@@ -885,6 +920,7 @@ Abra uma [Issue](https://github.com/guilherme-meloni/NeoVerse/issues) com:
 4. Reduza resolução da janela
 
 #### Cidade muito grande
+
 **Problema:** Pasta com 500+ itens trava
 **Solução:** NeoVerse limita automaticamente a 150 itens. Organize melhor suas pastas.
 
@@ -893,6 +929,7 @@ Abra uma [Issue](https://github.com/guilherme-meloni/NeoVerse/issues) com:
 ## 🙏 Créditos e Inspirações
 
 ### 🎨 Inspirações Visuais
+
 - **FSN (Jurassic Park, 1993)** - O explorador de arquivos 3D original da SGI
 - **Tron (1982) & Tron Legacy (2010)** - Estética cyberpunk néon
 - **Ready Player One (2018)** - Conceito de metaverso imersivo
@@ -900,12 +937,14 @@ Abra uma [Issue](https://github.com/guilherme-meloni/NeoVerse/issues) com:
 - **Blade Runner 2049** - Paleta de cores, arquitetura futurista
 
 ### 🛠️ Tecnologias
+
 - **Three.js** - Motor 3D WebGL usado no projeto
 - **Tauri** - Framework para apps nativos com web frontend
 - **Blender** - Inspiração para controles de câmera orbital
 - **Vite** - Build tool ultra-rápido
 
 ### 🎮 Jogos
+
 - **Minecraft** - Conceito de mundos modificáveis
 - **Garry's Mod** - Liberdade criativa total
 - **Portal** - Conceito de portais entre espaços
@@ -963,7 +1002,7 @@ pnpm run tauri:dev
 
 ## ⭐ Se você gostou, dê uma estrela!
 
-### *"O futuro da interação com computadores não é através deles, mas dentro deles."*
+### "O futuro da interação com computadores não é através deles, mas dentro deles."
 
 **NeoVerse - Entre no Código**
 
