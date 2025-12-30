@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { readDir } from '@tauri-apps/api/fs';
 import { open as shellOpen } from '@tauri-apps/api/shell';
-import { dirname } from '@tauri-apps/api/path'; // Import dirname for parent path
+import { dirname } from '@tauri-apps/api/path';
 
 export class CityManager {
   constructor(universe, windowManager, objectManager) {
@@ -9,172 +9,213 @@ export class CityManager {
     this.windowManager = windowManager;
     this.objectManager = objectManager;
     this.currentPath = null;
-    this.initialRootPath = null; // Store the initial path to determine 'city' view
-    this.doors = []; // Lista de IDs para verificar colisão
+    this.initialRootPath = null;
+    this.doors = [];
     this.isCityActive = false;
-    this.interactCooldown = false; // Add cooldown for interaction
-    
-    // Configurações de Design
+    this.interactCooldown = false;
+
     this.colors = {
       neonBlue: 0x00ffff,
       neonPink: 0xff00ff,
       neonGreen: 0x00ff00,
-      darkBase: 0x0a0a10,
-      glass: 0x00aaff,
-      factory: 0x555555,
+      office: 0x334455,
+      factory: 0x666666,
       matrix: 0x003300
     };
   }
 
   async startCity(path) {
-    console.log("🏙️ Iniciando Protocolo: Data Metropolis em", path);
+    console.log("🏙️ Iniciando cidade em:", path);
     this.isCityActive = true;
-    this.initialRootPath = path; // Set the root of this exploration
+    this.initialRootPath = path;
     this.loadLevel(path);
   }
 
   async loadLevel(path) {
     this.currentPath = path;
-    this.doors = []; // Limpa portas antigas
-    
-    // 1. Limpar Objetos da Cidade Anterior
-    await this.objectManager.removeAllCityObjects();
-    this.universe.colliders = []; // Clear collision boxes
+    this.doors = [];
 
-    // 2. Configurar Ambiente
+    // Limpar
+    await this.objectManager.removeAllCityObjects();
+    this.universe.colliders = [];
+
     const isCityView = (this.currentPath === this.initialRootPath);
+    
+    // Ambiente
     if (isCityView) {
-        this.universe.setEnvironment('city');
+        this.universe.scene.background = new THREE.Color(0x000510);
+        this.universe.scene.fog = new THREE.FogExp2(0x000510, 0.02);
     } else {
-        this.universe.setEnvironment('lobby');
+        this.universe.scene.background = new THREE.Color(0x0a0a0a);
+        this.universe.scene.fog = new THREE.FogExp2(0x0a0a0a, 0.05);
     }
 
-    // 3. Ler Arquivos
+    // Ler arquivos
     try {
       const entries = await readDir(path);
-      
+
       if (isCityView) {
-        this.buildCityBlock(entries);
+        await this.buildSimpleCity(entries);
       } else {
-        this.buildLobby(entries);
+        await this.buildSimpleLobby(entries);
       }
-      
-      // Mover player para o início da rua
+
+      // Spawn player
       if(this.universe.player) {
-        this.universe.player.position.set(0, 2, isCityView ? 10 : 0); // Start further out in city view
+        this.universe.player.position.set(0, 2, isCityView ? 15 : 8);
         this.universe.playerVelocity.set(0,0,0);
-        this.universe.fpsYaw = Math.PI; 
+        this.universe.fpsYaw = Math.PI;
         this.universe.fpsPitch = 0;
       }
-      
+
     } catch (e) {
-      console.error("Falha ao ler diretório da cidade:", e);
+      console.error("Erro ao ler diretório:", e);
     }
   }
 
-  buildCityBlock(entries) {
-    const MAX_ITEMS = 150;
-    let renderEntries = entries;
-    if (entries.length > MAX_ITEMS) {
-        console.warn(`⚠️ Diretório muito grande! Limitando a ${MAX_ITEMS}.`);
-        renderEntries = entries.slice(0, MAX_ITEMS);
+  async buildSimpleCity(entries) {
+    const MAX = 100;
+    if (entries.length > MAX) {
+        entries = entries.slice(0, MAX);
     }
 
-    const streetWidth = 4;
-    const buildingSize = 5;
-    const spacing = buildingSize + streetWidth;
-    
-    const cols = Math.ceil(Math.sqrt(renderEntries.length));
-
-    // Floor Collision
-    const floorBox = new THREE.Box3();
-    floorBox.min.set(-100, -5, -100);
-    floorBox.max.set(100, -0.1, 100); // FIX: Lowered slightly to prevent friction with player feet
-    this.universe.colliders.push(floorBox);
-    
-    renderEntries.forEach((entry, index) => {
-        const col = index % cols;
-        const row = Math.floor(index / cols);
-        
-        const x = (col * spacing) - (cols * spacing / 2);
-        const z = (row * spacing) - (cols * spacing / 2);
-        
-        // HEURISTIC FIX: Tauri readDir (non-recursive) doesn't always give types.
-        // Assume it's a Dir if no extension. If it has extension, it's a File.
-        const isDir = !entry.name.includes('.');
-        
-        if (isDir) {
-            this.createBuilding(entry, x, z);
-        } else {
-            this.createFileMonument(entry, x, z);
-        }
+    // Separar
+    const dirs = [];
+    const files = [];
+    entries.forEach(e => {
+        const isDir = !e.name.includes('.');
+        if (isDir) dirs.push(e);
+        else files.push(e);
     });
 
-    // Portal de Saída (Voltar) - Only if not at the root of initial exploration
+    console.log(`📊 ${dirs.length} pastas, ${files.length} arquivos`);
+
+    // Chão
+    const floor = new THREE.Box3();
+    floor.min.set(-100, -5, -100);
+    floor.max.set(100, -0.05, 100);
+    this.universe.colliders.push(floor);
+
+    // GRID SIMPLES - Ruas + Prédios
+    const STREET_WIDTH = 8;
+    const BLOCK_SIZE = 6;
+    const SPACING = BLOCK_SIZE + STREET_WIDTH;
+
+    // Calcular grid
+    const cols = Math.ceil(Math.sqrt(dirs.length));
+    
+    // Renderizar PASTAS como prédios
+    dirs.forEach((dir, i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+
+        const x = (col - cols / 2) * SPACING;
+        const z = (row - cols / 2) * SPACING;
+
+        this.createSimpleBuilding(dir, x, z);
+    });
+
+    // Renderizar ARQUIVOS no perímetro
+    const radius = cols * SPACING / 2 + 10;
+    files.forEach((file, i) => {
+        const angle = (i / files.length) * Math.PI * 2;
+        const x = Math.cos(angle) * radius;
+        const z = Math.sin(angle) * radius;
+
+        this.createSimpleFile(file, x, z);
+    });
+
+    // Portal voltar
     if (this.currentPath !== this.initialRootPath) {
-        this.createPortal("..", 0, 10, true);
+        await this.createExitPortal(0, radius + 5);
     }
+
+    console.log(`✅ Cidade criada: ${dirs.length + files.length} objetos`);
   }
 
-  async createBuilding(entry, x, z) {
-    const name = entry.name ? entry.name.toLowerCase() : 'dir';
-    let type = 'office';
-    let height = 6 + Math.random() * 8;
+  async createSimpleBuilding(entry, x, z) {
+    const name = entry.name.toLowerCase();
     
-    if (name.includes('node_modules') || name.includes('hidden') || name.includes('cache')) {
-        type = 'blackhole';
-    } else if (name === 'bin' || name.includes('system') || name.includes('lib')) {
-        type = 'factory';
-    } else if (name === 'src' || name.includes('code') || name.includes('project')) {
-        type = 'matrix';
-    } else if (name.includes('image') || name.includes('photo') || name.includes('picture')) {
-        type = 'gallery';
+    // Altura baseada em nome
+    let height = 8;
+    let color = this.colors.office;
+
+    if (name.includes('src') || name.includes('code')) {
+        height = 15;
+        color = this.colors.matrix;
+    } else if (name.includes('node_modules') || name.includes('.git')) {
+        height = 5;
+        color = 0x111111;
+    } else if (name.includes('bin') || name.includes('system')) {
+        height = 12;
+        color = this.colors.factory;
+    } else {
+        height = 6 + Math.random() * 6;
     }
 
-    const id = await this.objectManager.addObject('building', 
-        { x, y: 0, z }, 
-        { 
-            buildingType: type,
-            height: height,
-            label: entry.name,
-            color: this.colors.neonBlue, 
-            isDir: true
+    // Criar prédio simples (BOX)
+    const id = await this.objectManager.addObject('cube',
+        { x, y: height / 2, z },
+        {
+            scaleX: 5,
+            scaleY: height,
+            scaleZ: 5,
+            color: color,
+            label: entry.name
         },
         true
     );
 
-    const bBox = new THREE.Box3();
-    bBox.min.set(x - 2, 0, z - 2);
-    bBox.max.set(x + 2, height, z + 2);
-    this.universe.colliders.push(bBox);
+    // Porta verde na frente
+    await this.objectManager.addObject('cube',
+        { x, y: 1.5, z: z + 2.6 },
+        {
+            scaleX: 2,
+            scaleY: 3,
+            scaleZ: 0.2,
+            color: 0x00ff00
+        },
+        true
+    );
 
+    // Colisão
+    const box = new THREE.Box3();
+    box.min.set(x - 2.5, 0, z - 2.5);
+    box.max.set(x + 2.5, height, z + 2.5);
+    this.universe.colliders.push(box);
+
+    // Interação
     this.doors.push({
         id: id,
         targetPath: entry.path,
         type: 'dir',
-        pos: new THREE.Vector3(x, 0, z),
-        radius: 5, // Increased radius
+        pos: new THREE.Vector3(x, 0, z + 2.5),
+        radius: 5,
         name: entry.name
     });
   }
 
-  async createFileMonument(entry, x, z) {
-    const name = entry.name || 'file';
+  async createSimpleFile(entry, x, z) {
+    const name = entry.name;
     const ext = name.split('.').pop().toLowerCase();
-    
-    let color = 0xcccccc;
-    if (['png', 'jpg', 'jpeg', 'gif', 'bmp'].includes(ext)) color = this.colors.neonPink;
-    else if (['js', 'json', 'ts', 'rs', 'py', 'java', 'c', 'cpp', 'h', 'go'].includes(ext)) color = this.colors.neonBlue;
-    else if (['exe', 'sh', 'bat', 'bin', 'dmg', 'app'].includes(ext)) color = 0xff0000;
-    else if (['txt', 'md', 'doc', 'pdf'].includes(ext)) color = 0x00ff00;
 
-    const id = await this.objectManager.addObject('monument', 
-        { x, y: 1, z },
-        {
-            color: color,
-            label: name,
-            isFile: true
-        },
+    // Cor baseada em extensão
+    let color = 0xcccccc;
+    if (['png', 'jpg', 'jpeg'].includes(ext)) color = 0xff00ff;
+    else if (['js', 'ts', 'py'].includes(ext)) color = 0x00ffff;
+    else if (['txt', 'md'].includes(ext)) color = 0x00ff00;
+
+    // Pedestal
+    await this.objectManager.addObject('cylinder',
+        { x, y: 0.5, z },
+        { scale: 1, color: 0x222222 },
+        true
+    );
+
+    // Monumento
+    const id = await this.objectManager.addObject('pyramid',
+        { x, y: 2, z },
+        { scale: 1, color: color },
         true
     );
 
@@ -182,182 +223,217 @@ export class CityManager {
         id: id,
         targetPath: entry.path,
         type: 'file',
-        pos: new THREE.Vector3(x, 1, z),
-        radius: 2,
+        pos: new THREE.Vector3(x, 2, z),
+        radius: 2.5,
         name: entry.name
     });
   }
 
-  async createPortal(name, x, z, isBack) {
-    const id = await this.objectManager.addObject('portal',
-        { x, y: 1.5, z },
-        { label: isBack ? "VOLTAR (..)" : name },
+  async createExitPortal(x, z) {
+    await this.objectManager.addObject('torus',
+        { x, y: 2, z },
+        { scale: 2, color: 0xffaa00 },
         true
     );
 
     this.doors.push({
-        id: id,
         type: 'back',
-        pos: new THREE.Vector3(x, 1.5, z),
-        radius: 3,
-        name: name
+        pos: new THREE.Vector3(x, 2, z),
+        radius: 4,
+        name: '..'
     });
   }
 
-  async buildLobby(entries) {
-    const w = 15, h = 6, d = 15;
-    const wallThick = 1;
-
-    // --- VISUALS (via ObjectManager) ---
-    this.objectManager.addObject('cube', {x:0, y:-0.5, z:0}, { scale: w, color: 0x222222 }, true); // Floor
-    this.objectManager.addObject('cube', {x:0, y:h+0.5, z:0}, { scale: w, color: 0x222222 }, true); // Ceiling
-
-    // Walls
-    const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.2 });
-    // Back wall
-    this.objectManager.addObject('cube', {x:0, y:h/2, z: -d/2 - wallThick/2}, { scaleX: w, scaleY: h, scaleZ: wallThick, material: wallMaterial }, true);
-    // Front wall
-    this.objectManager.addObject('cube', {x:0, y:h/2, z: d/2 + wallThick/2}, { scaleX: w, scaleY: h, scaleZ: wallThick, material: wallMaterial }, true);
-    // Left wall
-    this.objectManager.addObject('cube', {x:-w/2 - wallThick/2, y:h/2, z: 0}, { scaleX: wallThick, scaleY: h, scaleZ: d, material: wallMaterial }, true);
-    // Right wall
-    this.objectManager.addObject('cube', {x:w/2 + wallThick/2, y:h/2, z: 0}, { scaleX: wallThick, scaleY: h, scaleZ: d, material: wallMaterial }, true);
-
-
-    // --- COLLISIONS ---
-    const walls = [
-        { min: [-w/2, 0, -d/2 - wallThick], max: [w/2, h, -d/2] }, // Back
-        { min: [-w/2, 0, d/2], max: [w/2, h, d/2 + wallThick] },   // Front
-        { min: [-w/2 - wallThick, 0, -d/2], max: [-w/2, h, d/2] }, // Left
-        { min: [w/2, 0, -d/2], max: [w/2 + wallThick, h, d/2] },   // Right
-        { min: [-w/2, -5, -d/2], max: [w/2, -0.1, d/2] },           // Floor (FIXED: lowered to -0.1)
-        { min: [-w/2, h, -d/2], max: [w/2, h+1, d/2] }              // Ceiling
-    ];
-
-    walls.forEach(dims => {
-        const box = new THREE.Box3();
-        box.min.set(...dims.min);
-        box.max.set(...dims.max);
-        this.universe.colliders.push(box);
-    });
-    
-    // EXIT DOOR (Behind start position, towards -Z)
-    this.createPortal("..", 0, d/2 - 0.5, true); // Behind player's starting point
-
-    // SEPARATE FILES AND DIRS (Heuristic Fix)
-    const files = [];
+  async buildSimpleLobby(entries) {
+    // Separar
     const dirs = [];
-    
+    const files = [];
     entries.forEach(e => {
-         // Same heuristic as City: No dot = Dir
-         const isDir = !e.name.includes('.');
-         if(isDir) dirs.push(e);
-         else files.push(e);
+        const isDir = !e.name.includes('.');
+        if (isDir) dirs.push(e);
+        else files.push(e);
     });
 
-    // FILES (Center Pedestals)
-    files.forEach((f, i) => {
-        const angle = (i / files.length) * Math.PI * 2;
-        const r = 4;
-        const fx = Math.cos(angle) * r;
-        const fz = Math.sin(angle) * r;
-        
-        // Pedestal + File
-        this.objectManager.addObject('cylinder', {x: fx, y: 0.5, z: fz}, { scale: 1, color: 0x333333 }, true);
-        this.objectManager.addObject('file', {x: fx, y: 1.5, z: fz}, { color: 0x00ffff, label: f.name }, true);
+    console.log(`🏛️ Lobby: ${dirs.length} pastas, ${files.length} arquivos`);
 
-        // Collision for pedestal
-        const pedBox = new THREE.Box3();
-        pedBox.min.set(fx - 0.5, 0, fz - 0.5);
-        pedBox.max.set(fx + 0.5, 1, fz + 0.5);
-        this.universe.colliders.push(pedBox);
+    const W = 20;
+    const H = 8;
+    const D = 20;
+
+    // Criar sala fechada
+    await this.createRoom(W, H, D);
+
+    // ARQUIVOS no centro (círculo)
+    const fileRadius = 6;
+    files.forEach((file, i) => {
+        const angle = (i / files.length) * Math.PI * 2;
+        const x = Math.cos(angle) * fileRadius;
+        const z = Math.sin(angle) * fileRadius;
+
+        // Pedestal
+        this.objectManager.addObject('cylinder',
+            { x, y: 0.5, z },
+            { scale: 0.8, color: 0x333333 },
+            true
+        );
+
+        // Arquivo
+        this.objectManager.addObject('cube',
+            { x, y: 1.5, z },
+            { scaleX: 0.6, scaleY: 1, scaleZ: 0.1, color: 0x00ffff },
+            true
+        );
+
+        const box = new THREE.Box3();
+        box.min.set(x - 0.5, 0, z - 0.5);
+        box.max.set(x + 0.5, 2, z + 0.5);
+        this.universe.colliders.push(box);
 
         this.doors.push({
             type: 'file',
-            targetPath: f.path,
-            pos: new THREE.Vector3(fx, 1.5, fz),
+            targetPath: file.path,
+            pos: new THREE.Vector3(x, 1.5, z),
             radius: 2,
-            name: f.name
+            name: file.name
         });
     });
 
-    // ELEVATORS (Subdirectories) - On Side Walls
-    dirs.forEach((dItem, i) => {
-        const isLeft = i % 2 === 0;
-        const xPos = isLeft ? -w/2 + 0.5 : w/2 - 0.5;
-        const zPos = ((i/2|0) - (dirs.length/4)) * 4;
+    // PASTAS nas paredes (elevadores)
+    dirs.forEach((dir, i) => {
+        const side = i % 4;
+        let x, z;
 
-        this.objectManager.addObject('building', // Reusing building as elevator frame
-            { x: xPos, y: 0, z: zPos }, 
-            { buildingType: 'office', height: 4, label: dItem.name, scale: 0.5 }, 
+        if (side === 0) { x = -W/2 + 2; z = -D/2 + 3 + (i / 4 | 0) * 5; }
+        else if (side === 1) { x = W/2 - 2; z = -D/2 + 3 + (i / 4 | 0) * 5; }
+        else if (side === 2) { x = -W/2 + 3 + (i / 4 | 0) * 5; z = -D/2 + 2; }
+        else { x = -W/2 + 3 + (i / 4 | 0) * 5; z = D/2 - 2; }
+
+        this.objectManager.addObject('cylinder',
+            { x, y: 2, z },
+            { scale: 1.2, height: 4, color: 0xffaa00 },
             true
         );
-        
+
         this.doors.push({
             type: 'dir',
-            targetPath: dItem.path,
-            pos: new THREE.Vector3(xPos, 1, zPos),
+            targetPath: dir.path,
+            pos: new THREE.Vector3(x, 1, z),
             radius: 3,
-            name: dItem.name
+            name: dir.name
         });
     });
+
+    // Portal de saída atrás
+    await this.createExitPortal(0, D/2 - 2);
+
+    console.log(`✅ Lobby criado`);
+  }
+
+  async createRoom(w, h, d) {
+    const WALL = 1;
+
+    // Chão
+    await this.objectManager.addObject('cube',
+        { x: 0, y: -0.5, z: 0 },
+        { scaleX: w, scaleY: 1, scaleZ: d, color: 0x1a1a1a },
+        true
+    );
+
+    // Teto
+    await this.objectManager.addObject('cube',
+        { x: 0, y: h + 0.5, z: 0 },
+        { scaleX: w, scaleY: 1, scaleZ: d, color: 0x1a1a1a },
+        true
+    );
+
+    // 4 Paredes
+    const walls = [
+        { x: 0, y: h/2, z: -d/2 - WALL/2, sx: w, sy: h, sz: WALL },      // Norte
+        { x: 0, y: h/2, z: d/2 + WALL/2, sx: w, sy: h, sz: WALL },       // Sul
+        { x: -w/2 - WALL/2, y: h/2, z: 0, sx: WALL, sy: h, sz: d },      // Oeste
+        { x: w/2 + WALL/2, y: h/2, z: 0, sx: WALL, sy: h, sz: d }        // Leste
+    ];
+
+    for (const wall of walls) {
+        await this.objectManager.addObject('cube',
+            { x: wall.x, y: wall.y, z: wall.z },
+            { scaleX: wall.sx, scaleY: wall.sy, scaleZ: wall.sz, color: 0x2a2a2a },
+            true
+        );
+
+        // Colisão
+        const box = new THREE.Box3();
+        box.min.set(wall.x - wall.sx/2, 0, wall.z - wall.sz/2);
+        box.max.set(wall.x + wall.sx/2, h, wall.z + wall.sz/2);
+        this.universe.colliders.push(box);
+    }
+
+    // Colisões chão/teto
+    this.universe.colliders.push(
+        new THREE.Box3(new THREE.Vector3(-w/2, -5, -d/2), new THREE.Vector3(w/2, -0.05, d/2)),
+        new THREE.Box3(new THREE.Vector3(-w/2, h, -d/2), new THREE.Vector3(w/2, h+1, d/2))
+    );
   }
 
   update(playerPos) {
     if (!this.isCityActive) return;
-    
-    let nearest = null;
-    let minD = Infinity;
 
+    let nearest = null;
+    let minDist = Infinity;
+
+    // Encontrar porta mais próxima
     for (const door of this.doors) {
         const dist = playerPos.distanceTo(door.pos);
-        if (dist < door.radius) {
-            if (dist < minD) {
-                minD = dist;
-                nearest = door;
-            }
+        if (dist < door.radius && dist < minDist) {
+            minDist = dist;
+            nearest = door;
         }
     }
 
     const prompt = document.getElementById('interaction-prompt');
+    
     if (nearest) {
         let text = "";
-        if (nearest.type === 'dir') text = `ENTRAR ${nearest.name}`;
-        else if (nearest.type === 'back') text = "VOLTAR";
-        else text = `ABRIR ${nearest.name}`;
-        
-        prompt.textContent = `[E] / TAP: ${text}`;
+        if (nearest.type === 'dir') text = `ENTRAR: ${nearest.name}`;
+        else if (nearest.type === 'back') text = "VOLTAR (..)";
+        else text = `ABRIR: ${nearest.name}`;
+
+        prompt.textContent = `[E] ${text}`;
         prompt.style.display = 'block';
 
-        if ((this.universe.keys.e || (this.universe.joystick.active && minD < 1.0)) && !this.interactCooldown) {
-            this.handleInteraction(nearest);
-            this.interactCooldown = true;
-            setTimeout(() => this.interactCooldown = false, 500); 
+        // Interagir
+        if ((this.universe.keys.e || (this.universe.joystick.active && minDist < 1.5)) && !this.interactCooldown) {
+            this.interact(nearest);
         }
     } else {
         prompt.style.display = 'none';
     }
-    
+
+    // Reset key
     if (this.universe.keys.e) this.universe.keys.e = false;
   }
 
-  async handleInteraction(target) {
+  async interact(target) {
       if (this.interactCooldown) return;
+      
       this.interactCooldown = true;
       setTimeout(() => this.interactCooldown = false, 500);
 
       if (target.type === 'dir') {
+          console.log("→ Entrando em:", target.name);
           this.loadLevel(target.targetPath);
-      } else if (target.type === 'back') {
-          const parentPath = await dirname(this.currentPath);
-          if (parentPath !== this.currentPath) { // Check if we actually moved up
-              this.loadLevel(parentPath);
+      } 
+      else if (target.type === 'back') {
+          console.log("← Voltando");
+          const parent = await dirname(this.currentPath);
+          if (parent !== this.currentPath) {
+              this.loadLevel(parent);
           } else {
-              // If already at drive root (e.g. C:/), then just stay or go to initialRootPath
-              this.loadLevel(this.initialRootPath); // Go back to the initial city view
+              this.loadLevel(this.initialRootPath);
           }
-      } else if (target.type === 'file') {
-          console.log("Opening:", target.targetPath);
+      } 
+      else if (target.type === 'file') {
+          console.log("📂 Abrindo:", target.name);
           shellOpen(target.targetPath);
       }
   }
