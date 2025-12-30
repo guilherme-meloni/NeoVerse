@@ -946,40 +946,12 @@ OU OUTRAS NEGOCIAÇÕES NO SOFTWARE.
 
 **Tradução simples:** Faça o que quiser. Use comercialmente. Modifique. Distribua. Sem restrições.
 
----
-
-## 💬 Contato e Comunidade
-
-- 🐛 **Bugs e Sugestões**: [GitHub Issues](https://github.com/seu-usuario/neoverse/issues)
-- 💬 **Discussões**: [GitHub Discussions](https://github.com/seu-usuario/neoverse/discussions)
-- ⭐ **Estrela no GitHub**: Ajuda muito!
-- 🐦 **Twitter/X**: @seu_usuario (se tiver)
-- 💬 **Discord**: [Link do servidor] (se criar)
-
----
-
-## 🌟 Showcase
-
-<details>
-<summary><b>📸 Screenshots (expandir)</b></summary>
-
-Adicione aqui:
-- Screenshot da cidade
-- Screenshot do modo FPS
-- Screenshot do lobby
-- Screenshot do terminal
-- GIF de navegação
-
-</details>
-
----
-
 ## 🚀 Quick Start (TL;DR)
 
 ```bash
 # Clone
-git clone https://github.com/seu-usuario/neoverse.git
-cd neoverse
+git clone https://github.com/guilherme-meloni/NeoVerse.git
+cd NeoVerse
 
 # Instale
 pnpm install
@@ -1003,7 +975,7 @@ pnpm run tauri:dev
 
 ---
 
-Made with 💚 by [Seu Nome]  
+Made with 💚 by [GuilhermeM]  
 Built with [Three.js](https://threejs.org/) + [Tauri](https://tauri.app/)
 
 [⬆ Voltar ao topo](#-neoverse)
